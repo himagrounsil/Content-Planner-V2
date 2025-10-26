@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Management - Modern & Simple</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="header-info">
+                    <h1><i class="fas fa-tasks"></i> Task Manager</h1>
+                    <p>Kelola task dengan mudah dan efisien</p>
+                </div>
+                <div class="header-actions">
+                    <div class="header-logos">
+                        <img src="Logo\LOGO-UNSIL.png" alt="UNSIL" class="logo-sm" />
+                        <img src="Logo\Logo-HIMAGRO.png" alt="HIMAGRO" class="logo-sm" />
+                        <img src="Logo\Logo-CitaSaswahita Tanpa BG.png" alt="Cita Saswahita" class="logo-sm" />
+                    </div>
+                    <button class="btn btn-icon" id="toggleThemeBtn" title="Toggle theme">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button class="btn btn-primary" onclick="openAddTaskForm()">
+                        <i class="fas fa-plus"></i>
+                        <span>Tambah Task</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-list-check"></i>
+                    </div>
+                    <div class="stat-info">
+                        <p class="stat-label">Total Tasks</p>
+                        <p class="stat-value" id="totalTasks">0</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <p class="stat-label">Selesai</p>
+                        <p class="stat-value" id="completedTasks">0</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="stat-info">
+                        <p class="stat-label">Dalam Proses</p>
+                        <p class="stat-value" id="inProgressTasks">0</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <p class="stat-label">Deadline Mendesak</p>
+                        <p class="stat-value" id="urgentTasks">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="search-filter-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Cari task..." onkeyup="handleSearch()">
+                </div>
+                <div class="filter-group">
+                    <select id="assignedToFilter" onchange="applyFilters()">
+                        <option value="">Semua Assignee</option>
+                        <option value="Design Creator">Design Creator</option>
+                        <option value="Room Of Documentary">Room Of Documentary</option>
+                        <option value="Relation And Archive">Relation And Archive</option>
+                        <option value="Jurnalism">Jurnalism</option>
+                        <option value="Social Media">Social Media</option>
+                    </select>
+                    <select id="formatFilter" onchange="applyFilters()">
+                        <option value="">Semua Format</option>
+                        <option value="Feeds">Feeds</option>
+                        <option value="Feeds (Grid)">Feeds (Grid)</option>
+                        <option value="Corrusel">Carousel</option>
+                        <option value="Story">Story</option>
+                        <option value="Video">Video</option>
+                        <option value="Article">Article</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="refreshTasks()">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tasks Container -->
+            <div class="tasks-container">
+                <!-- Loading State -->
+                <div id="loadingState" class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Memuat data...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="errorState" class="error-state" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p id="errorMessage">Gagal memuat data</p>
+                    <button class="btn btn-primary" onclick="refreshTasks()">Coba Lagi</button>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <i class="fas fa-clipboard-list"></i>
+                    <h3>Belum ada task</h3>
+                    <p>Klik tombol "Tambah Task" untuk memulai</p>
+                </div>
+
+                <!-- Tasks List -->
+                <div id="tasksList" class="tasks-list">
+                    <!-- Tasks will be populated here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Task Form (Inline) -->
+    <div id="addTaskForm" class="add-task-form" style="display: none;">
+        <div class="form-container">
+            <div class="form-header">
+                <h3><i class="fas fa-plus"></i> Tambah Task Baru</h3>
+                <button class="btn btn-icon" onclick="closeAddTaskForm()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="taskForm" class="task-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskInput">Task <span class="required">*</span></label>
+                        <textarea id="taskInput" name="task" required placeholder="Deskripsi task..."></textarea>
+                        <span class="error-message" id="taskError"></span>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="platformInput">Platform</label>
+                        <select id="platformInput" name="platform">
+                            <option value="">Pilih Platform</option>
+                            <option value="Instagram">Instagram</option>
+                            <option value="Tiktok">TikTok</option>
+                            <option value="Youtube">YouTube</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="formatInput">Format</label>
+                        <select id="formatInput" name="format">
+                            <option value="">Pilih Format</option>
+                            <option value="Feeds">Feeds</option>
+                            <option value="Feeds (Grid)">Feeds (Grid)</option>
+                            <option value="Corrusel">Carousel</option>
+                            <option value="Story">Story</option>
+                            <option value="Video">Video</option>
+                            <option value="Article">Article</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="assignedToInput">Assigned To <span class="required">*</span></label>
+                        <select id="assignedToInput" name="assignedTo" required>
+                            <option value="">Pilih Assignee</option>
+                            <option value="Design Creator">Design Creator</option>
+                            <option value="Room Of Documentary">Room Of Documentary</option>
+                            <option value="Relation And Archive">Relation And Archive</option>
+                            <option value="Jurnalism">Jurnalism</option>
+                            <option value="Social Media">Social Media</option>
+                        </select>
+                        <span class="error-message" id="assignedToError"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dueDateInput">Due Date <span class="required">*</span></label>
+                        <input type="date" id="dueDateInput" name="dueDate" required>
+                        <span class="error-message" id="dueDateError"></span>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="inProgressInput">Status <span class="required">*</span></label>
+                        <select id="inProgressInput" name="inProgress" required>
+                            <option value="Not Done">Belum Dimulai</option>
+                            <option value="On Progress">Dalam Proses</option>
+                            <option value="Ready To Upload">Siap Upload</option>
+                            <option value="Done">Selesai</option>
+                        </select>
+                        <span class="error-message" id="inProgressError"></span>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="referenceInput">Reference</label>
+                        <input type="url" id="referenceInput" name="reference" placeholder="https://example.com">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group full-width">
+                        <label for="resultInput">Result</label>
+                        <textarea id="resultInput" name="result" placeholder="Hasil atau output..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group full-width">
+                        <label for="notesInput">Notes</label>
+                        <textarea id="notesInput" name="notes" placeholder="Catatan tambahan..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddTaskForm()">Batal</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        Simpan Task
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingMessage">Memuat data...</p>
+        </div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <button id="scrollTopBtn" class="scroll-top-btn" title="Kembali ke atas">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <!-- Scripts -->
+    <script src="script.js"></script>
+</body>
+</html>
