@@ -3,8 +3,8 @@ class TaskManager {
     constructor() {
         this.config = {
             API_BASE_URL: 'https://script.google.com/macros/s/AKfycbxmk_WEgXSPN9OzFQyPAgmcNZTACH1sa69V5wZbngXz0kvjpIiqe5jLcGI1kx4a_0-6/exec',
-            CACHE_DURATION: 10000, // 10 seconds (reduced for faster updates)
-            DEBOUNCE_DELAY: 200 // 200ms for faster search response
+            CACHE_DURATION: 10000, // 10 seconds
+            DEBOUNCE_DELAY: 300 // 300ms for search
         };
         
         this.tasks = [];
@@ -78,21 +78,24 @@ class TaskManager {
     setupTheme() {
         const themeBtn = document.getElementById('toggleThemeBtn');
         const savedTheme = localStorage.getItem('theme') || 'light';
+        const html = document.documentElement;
         
-        // Apply saved theme
+        // Apply saved theme immediately
         if (savedTheme === 'dark') {
-            document.documentElement.classList.add('dark');
+            html.classList.add('dark');
         } else {
-            document.documentElement.classList.remove('dark');
+            html.classList.remove('dark');
         }
 
         if (themeBtn) {
-    themeBtn.addEventListener('click', () => {
-        document.documentElement.classList.toggle('dark');
-        const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-        localStorage.setItem('theme', mode);
-                this.updateThemeIcon(themeBtn, mode);
+            themeBtn.addEventListener('click', () => {
+                html.classList.toggle('dark');
+                const currentMode = html.classList.contains('dark') ? 'dark' : 'light';
+                localStorage.setItem('theme', currentMode);
+                this.updateThemeIcon(themeBtn, currentMode);
             });
+            
+            // Set initial icon
             this.updateThemeIcon(themeBtn, savedTheme);
         }
     }
@@ -100,7 +103,11 @@ class TaskManager {
     updateThemeIcon(btn, mode) {
         const icon = btn.querySelector('i');
         if (icon) {
-            icon.className = mode === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+            if (mode === 'dark') {
+                icon.className = 'fas fa-sun';
+            } else {
+                icon.className = 'fas fa-moon';
+            }
         }
     }
 
@@ -153,7 +160,6 @@ class TaskManager {
             }
             
             const result = await response.json();
-            console.log('API Response:', action, result);
             return result;
         } catch (error) {
             console.error('API request failed:', error);
@@ -165,15 +171,15 @@ class TaskManager {
         if (this.isLoading) return;
         
         // Check cache
-    const now = Date.now();
+        const now = Date.now();
         if (!forceRefresh && this.cache.data && (now - this.cache.timestamp) < this.config.CACHE_DURATION) {
             this.tasks = this.cache.data;
             this.applyFiltersAndSearch();
             this.updateStats();
-        return;
-    }
+            return;
+        }
     
-    try {
+        try {
             this.isLoading = true;
             this.showLoading();
             
@@ -182,7 +188,7 @@ class TaskManager {
                 task && (task.task || task.platform || task.assignedTo)
             );
         
-        // Update cache
+            // Update cache
             this.cache.data = this.tasks;
             this.cache.timestamp = now;
             
@@ -190,32 +196,28 @@ class TaskManager {
             this.updateStats();
             this.hideLoading();
         
-    } catch (error) {
-        console.error('Failed to load tasks:', error);
+        } catch (error) {
+            console.error('Failed to load tasks:', error);
             this.showError('Gagal memuat data tasks');
-    } finally {
+        } finally {
             this.isLoading = false;
         }
     }
 
     async createTask(taskData) {
         try {
-            // Show minimal loading for faster UX
             this.showToast('Menyimpan task...', 'info');
             const response = await this.makeRequest('createTask', { data: JSON.stringify(taskData) });
             
             console.log('Create task response:', response);
             
-            // Check if response exists and has success indicator
             if (response && (response.message || response.success || response.no)) {
                 this.showToast('Task berhasil ditambahkan', 'success');
                 this.closeAddTaskForm();
-                // Load tasks without showing loading overlay
                 await this.loadTasks(true);
             } else if (response && response.error) {
                 this.showToast(response.error, 'error');
             } else {
-                // If no error but also no clear success, assume success if we got a response
                 this.showToast('Task berhasil ditambahkan', 'success');
                 this.closeAddTaskForm();
                 await this.loadTasks(true);
@@ -228,7 +230,6 @@ class TaskManager {
 
     async updateTask(taskId, taskData) {
         try {
-            // Show minimal loading for faster UX
             this.showToast('Menyimpan perubahan...', 'info');
             
             // Clear cache first
@@ -245,7 +246,6 @@ class TaskManager {
             if (response && (response.message || response.success || response.no)) {
                 this.showToast('Task berhasil diupdate', 'success');
                 this.closeAddTaskForm();
-                // Force refresh to get latest data
                 await this.loadTasks(true);
             } else {
                 throw new Error(response?.error || 'Gagal mengupdate task');
@@ -258,8 +258,8 @@ class TaskManager {
 
     async deleteTask(taskId) {
         if (!confirm('Apakah Anda yakin ingin menghapus task ini?')) {
-        return;
-    }
+            return;
+        }
     
         try {
             this.showLoading('Menghapus task...');
@@ -268,7 +268,7 @@ class TaskManager {
             if (response && (response.message || response.success)) {
                 this.showToast('Task berhasil dihapus', 'success');
                 await this.loadTasks(true);
-        } else {
+            } else {
                 throw new Error(response?.error || 'Gagal menghapus task');
             }
         } catch (error) {
@@ -293,7 +293,7 @@ class TaskManager {
                 const dueDate = new Date(task.dueDate);
                 const today = new Date();
                 const daysDiff = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
-                return daysDiff <= 30; // Show done tasks only if they're within 30 days
+                return daysDiff <= 30;
             }
             return true;
         });
@@ -343,8 +343,8 @@ class TaskManager {
             return;
         }
     
-    // Use document fragment for better performance
-    const fragment = document.createDocumentFragment();
+        // Use document fragment for better performance
+        const fragment = document.createDocumentFragment();
         const tempDiv = document.createElement('div');
         
         this.filteredTasks.forEach(task => {
@@ -382,19 +382,19 @@ class TaskManager {
                         <button class="btn btn-icon btn-danger" onclick="taskManager.deleteTask(${task.no})" title="Hapus">
                             <i class="fas fa-trash"></i>
                         </button>
-        </div>
-        </div>
+                    </div>
+                </div>
                 
                 <div class="task-meta">
                     ${task.platform ? `<span><i class="fas fa-globe"></i> ${this.escapeHtml(task.platform)}</span>` : ''}
                     ${task.format ? `<span><i class="fas fa-file"></i> ${this.escapeHtml(task.format)}</span>` : ''}
                     ${task.assignedTo ? `<span><i class="fas fa-user"></i> ${this.escapeHtml(task.assignedTo)}</span>` : ''}
-        </div>
+                </div>
                 
                 <div class="task-status ${statusClass}">
                     <i class="fas fa-circle"></i>
                     ${this.escapeHtml(task.inProgress || 'Not Done')}
-        </div>
+                </div>
                 
                 <div class="task-deadline ${deadlineClass}">
                     <i class="fas fa-calendar"></i>
@@ -490,7 +490,7 @@ class TaskManager {
     }
 
     async handleSubmitTask(e) {
-    e.preventDefault();
+        e.preventDefault();
         
         const formData = new FormData(e.target);
         const taskData = {
@@ -506,8 +506,8 @@ class TaskManager {
         };
         
         if (!this.validateTask(taskData)) {
-        return;
-    }
+            return;
+        }
     
         // Check if this is an edit operation
         const taskId = e.target.dataset.taskId;
@@ -520,45 +520,45 @@ class TaskManager {
 
     validateTask(data) {
         this.clearFormErrors();
-    let isValid = true;
+        let isValid = true;
     
-    const requiredFields = ['task', 'assignedTo', 'dueDate', 'inProgress'];
+        const requiredFields = ['task', 'assignedTo', 'dueDate', 'inProgress'];
     
-    requiredFields.forEach(field => {
-        if (!data[field] || String(data[field]).trim() === '') {
+        requiredFields.forEach(field => {
+            if (!data[field] || String(data[field]).trim() === '') {
                 this.showFieldError(field, `${field} harus diisi`);
-            isValid = false;
-        }
-    });
+                isValid = false;
+            }
+        });
     
-    // Date validation - only validate if date is provided and not empty
-    if (data.dueDate && data.dueDate.trim() !== '') {
+        // Date validation - only validate if date is provided and not empty
+        if (data.dueDate && data.dueDate.trim() !== '') {
             const selectedDate = new Date(data.dueDate + 'T00:00:00');
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        if (selectedDate < today) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            if (selectedDate < today) {
                 this.showFieldError('dueDate', 'Due date tidak boleh di masa lalu');
-            isValid = false;
+                isValid = false;
+            }
         }
-    }
     
-    return isValid;
-}
+        return isValid;
+    }
 
     showFieldError(field, message) {
         const errorElement = document.getElementById(`${field}Error`);
-    if (errorElement) {
-        errorElement.textContent = message;
+        if (errorElement) {
+            errorElement.textContent = message;
+        }
     }
-}
 
     clearFormErrors() {
-    const errorElements = document.querySelectorAll('.error-message');
-    errorElements.forEach(element => {
-        element.textContent = '';
-    });
-}
+        const errorElements = document.querySelectorAll('.error-message');
+        errorElements.forEach(element => {
+            element.textContent = '';
+        });
+    }
 
 // Task Actions
     async editTask(taskId) {
@@ -578,7 +578,6 @@ class TaskManager {
 
     async quickUpdateStatus(taskId, newStatus) {
         try {
-            // Show minimal loading for faster UX
             this.showToast('Mengupdate status...', 'info');
             
             // Clear cache first
@@ -594,7 +593,6 @@ class TaskManager {
             
             if (response && (response.message || response.success || response.no)) {
                 this.showToast('Status berhasil diupdate', 'success');
-                // Force refresh to get latest data
                 await this.loadTasks(true);
             } else {
                 throw new Error(response?.error || 'Gagal mengupdate status');
@@ -688,31 +686,31 @@ class TaskManager {
         const container = document.getElementById('toastContainer');
         if (!container) return;
         
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
     
-    const icon = type === 'success' ? 'fas fa-check-circle' :
-                 type === 'error' ? 'fas fa-exclamation-circle' :
-                 type === 'warning' ? 'fas fa-exclamation-triangle' :
-                 'fas fa-info-circle';
+        const icon = type === 'success' ? 'fas fa-check-circle' :
+                     type === 'error' ? 'fas fa-exclamation-circle' :
+                     type === 'warning' ? 'fas fa-exclamation-triangle' :
+                     'fas fa-info-circle';
     
-    toast.innerHTML = `
+        toast.innerHTML = `
             <i class="toast-icon ${icon}"></i>
             <span class="toast-message">${message}</span>
             <button class="toast-close" onclick="this.parentElement.remove()">
                 <i class="fas fa-times"></i>
             </button>
-    `;
+        `;
     
         container.appendChild(toast);
     
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (toast.parentElement) {
-            toast.remove();
-        }
-    }, 5000);
-}
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 5000);
+    }
 
     // Utility Methods
     formatDate(dateString) {
