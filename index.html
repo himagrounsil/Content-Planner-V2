@@ -89,20 +89,23 @@
                 <div class="filter-group">
                     <select id="assignedToFilter" onchange="applyFilters()">
                         <option value="">Semua Assignee</option>
+                        <option value="Content Writer">Content Writer</option>
                         <option value="Design Creator">Design Creator</option>
-                        <option value="Room Of Documentary">Room Of Documentary</option>
                         <option value="Relation And Archive">Relation And Archive</option>
-                        <option value="Jurnalism">Jurnalism</option>
+                        <option value="Room Of Documentary">Room Of Documentary</option>
                         <option value="Social Media">Social Media</option>
                     </select>
                     <select id="formatFilter" onchange="applyFilters()">
                         <option value="">Semua Format</option>
+                        <option value="Article">Article</option>
+                        <option value="Caption">Caption</option>
+                        <option value="Carousel">Carousel</option>
                         <option value="Feeds">Feeds</option>
                         <option value="Feeds (Grid)">Feeds (Grid)</option>
-                        <option value="Corrusel">Carousel</option>
+                        <option value="Foto">Foto</option>
+                        <option value="Journal">Journal</option>
                         <option value="Story">Story</option>
                         <option value="Video">Video</option>
-                        <option value="Article">Article</option>
                     </select>
                     <button class="btn btn-secondary" onclick="refreshTasks()">
                         <i class="fas fa-sync-alt"></i>
@@ -173,12 +176,15 @@
                         <label for="formatInput">Format</label>
                         <select id="formatInput" name="format">
                             <option value="">Pilih Format</option>
+                            <option value="Article">Article</option>
+                            <option value="Caption">Caption</option>
+                            <option value="Carousel">Carousel</option>
                             <option value="Feeds">Feeds</option>
                             <option value="Feeds (Grid)">Feeds (Grid)</option>
-                            <option value="Corrusel">Carousel</option>
+                            <option value="Foto">Foto</option>
+                            <option value="Journal">Journal</option>
                             <option value="Story">Story</option>
                             <option value="Video">Video</option>
-                            <option value="Article">Article</option>
                         </select>
                     </div>
                 </div>
@@ -188,10 +194,10 @@
                         <label for="assignedToInput">Assigned To <span class="required">*</span></label>
                         <select id="assignedToInput" name="assignedTo" required>
                             <option value="">Pilih Assignee</option>
+                            <option value="Content Writer">Content Writer</option>
                             <option value="Design Creator">Design Creator</option>
-                            <option value="Room Of Documentary">Room Of Documentary</option>
                             <option value="Relation And Archive">Relation And Archive</option>
-                            <option value="Jurnalism">Jurnalism</option>
+                            <option value="Room Of Documentary">Room Of Documentary</option>
                             <option value="Social Media">Social Media</option>
                         </select>
                         <span class="error-message" id="assignedToError"></span>
