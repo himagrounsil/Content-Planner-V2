@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CMS HIMAGRO">
 
-    <title>HIMAGRO Content Management System</title>
+    <title>CMS HIMAGRO - Content Management</title>
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
@@ -24,9 +24,16 @@
 </head>
 
 <body>
-    <!-- Global Loading Overlay -->
-    <div id="loadingStateContent" class="loading-overlay" style="display: none;">
-        <div class="spinner"></div>
+    <!-- Global Loading Overlay / Splash Screen -->
+    <div id="loadingStateContent" class="loading-overlay">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 24px;">
+            <div class="spinner"></div>
+            <div
+                style="text-align: center; animation: fadeIn 1s ease-in-out; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0;">Content Management System</h2>
+                <p style="font-size: 1.1rem; color: var(--primary); font-weight: 600;">HIMAGRO</p>
+            </div>
+        </div>
     </div>
     <!-- Sidebar Navigation -->
     <aside class="sidebar" id="sidebar">
@@ -37,11 +44,13 @@
 
             <div class="sidebar-logo">
                 <div class="logo-group">
-                    <img src="Logo/LOGO-UNSIL.png" alt="UNSIL">
-                    <img src="Logo/Logo-HIMAGRO.png" alt="HIMAGRO">
-                    <img src="Logo/Logo-CitaSaswahita Tanpa BG.png" alt="Cita Saswahita">
+                    <img src="Logo/Unsil.png" alt="UNSIL">
+                    <img src="Logo/Himagro.png" alt="HIMAGRO">
+                    <img src="Logo/Kabinet.png" alt="Kabinet">
+                    <img src="Logo/BluSpeed.png" alt="BluSpeed">
+                    <img src="Logo/Berdampak.png" alt="Berdampak">
                 </div>
-                <h2>CMS HIMAGRO</h2>
+                <h2>Content Management System</h2>
             </div>
 
             <!-- Spacer for mobile centering -->
@@ -81,8 +90,9 @@
     <main class="main-wrapper">
         <!-- Welcome Banner -->
         <header class="welcome-banner">
-            <h1 id="pageTitle">Content Management System</h1>
-            <p id="pageSubtitle">Dashboard monitoring Program Kerja dan Konten Media Sosial HIMAGRO</p>
+            <h1 id="pageTitle">Content Planner</h1>
+            <p id="pageSubtitle">Modul untuk mengatur, menjadwalkan, dan memantau konten agar pengelolaan informasi
+                berjalan terstruktur dan terkoordinasi.</p>
         </header>
 
         <!-- Dynamic Content Sections -->

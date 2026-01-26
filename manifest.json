@@ -1,7 +1,7 @@
 {
-  "name": "HIMAGRO Content Management System",
+  "name": "CMS HIMAGRO",
   "short_name": "CMS HIMAGRO",
-  "description": "Dashboard monitoring Program Kerja dan Konten Media Sosial HIMAGRO",
+  "description": "Dashboard Untuk Mengelola Konten Media Sosial HIMAGRO",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#041e18",

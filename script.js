@@ -70,13 +70,25 @@ class AppManager {
         document.getElementById(`${sectionId}-section`).classList.add('active');
         this.currentSection = sectionId;
 
-        // Update Dynamic Titles
-        const sectionNames = {
-            'content-planner': 'Content Planner',
-            'prestasi': 'Prestasi Mahasiswa',
-            'media-partner': 'Media Partner'
+        // Update Dynamic Titles & Subtitles
+        const sectionInfo = {
+            'content-planner': {
+                title: 'Content Planner',
+                subtitle: 'Modul untuk mengatur, menjadwalkan, dan memantau konten agar pengelolaan informasi berjalan terstruktur dan terkoordinasi.'
+            },
+            'prestasi': {
+                title: 'Prestasi Mahasiswa',
+                subtitle: 'Fitur pengelolaan data prestasi mahasiswa sebagai arsip internal dan bahan publikasi resmi.'
+            },
+            'media-partner': {
+                title: 'Media Partner',
+                subtitle: 'Menu pengelolaan data dan kerja sama media partner untuk mendukung kebutuhan publikasi dan kolaborasi.'
+            }
         };
-        document.getElementById('pageTitle').textContent = sectionNames[sectionId];
+
+        const info = sectionInfo[sectionId];
+        document.getElementById('pageTitle').textContent = info.title;
+        document.getElementById('pageSubtitle').textContent = info.subtitle;
 
         // Close mobile menu if open
         const navContainer = document.getElementById('navContainer');
