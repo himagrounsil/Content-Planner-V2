@@ -1,772 +1,708 @@
-// Modern Task Management System
-class TaskManager {
+const CONFIG = {
+    API_URL: 'https://script.google.com/macros/s/AKfycbwpWA1XYxZpRauGGI-t_qm1Onq7cC0BGh8j7qglV1MyQFu6_ULxavMjorQ1ooZM0xLV/exec',
+};
+
+class AppManager {
     constructor() {
-        this.config = {
-            API_BASE_URL: 'https://script.google.com/macros/s/AKfycbxmk_WEgXSPN9OzFQyPAgmcNZTACH1sa69V5wZbngXz0kvjpIiqe5jLcGI1kx4a_0-6/exec',
-            CACHE_DURATION: 10000, // 10 seconds
-            DEBOUNCE_DELAY: 300 // 300ms for search
-        };
-        
-        this.tasks = [];
-        this.filteredTasks = [];
-        this.isLoading = false;
-        this.cache = { data: null, timestamp: 0 };
-        this.searchTerm = '';
-        this.filters = { assignedTo: '', format: '' };
-        this.searchTimeout = null;
-        
+        this.currentSection = 'content-planner';
+        this.currentView = 'list';
+        this.currentDate = new Date(); // For month navigation
+        this.data = { tasks: [], prestasi: [], media: [] };
+        this.filteredData = { tasks: [], prestasi: [], media: [] };
         this.init();
     }
 
-    init() {
+    async init() {
         this.setupEventListeners();
-        this.setupTheme();
-        this.setupScrollButton();
-        this.loadTasks();
+        await this.loadAllData();
+        this.switchSection('content-planner', document.querySelector('.nav-item.active'));
     }
 
     setupEventListeners() {
-        // Search with debouncing
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.searchTerm = e.target.value.toLowerCase();
-                this.debounceSearch();
-            });
-        }
-
-        // Filters
-        const assignedToFilter = document.getElementById('assignedToFilter');
-        const formatFilter = document.getElementById('formatFilter');
-        
-        if (assignedToFilter) {
-            assignedToFilter.addEventListener('change', (e) => {
-                this.filters.assignedTo = e.target.value;
-                this.applyFiltersAndSearch();
-            });
-        }
-        
-        if (formatFilter) {
-            formatFilter.addEventListener('change', (e) => {
-                this.filters.format = e.target.value;
-                this.applyFiltersAndSearch();
-            });
-        }
-
-        // Form submission
         const taskForm = document.getElementById('taskForm');
         if (taskForm) {
-            taskForm.addEventListener('submit', (e) => this.handleSubmitTask(e));
+            taskForm.addEventListener('submit', (e) => this.handleTaskSubmit(e));
         }
 
-        // Close form on outside click
-        document.addEventListener('click', (e) => {
-            const addTaskForm = document.getElementById('addTaskForm');
-            if (e.target === addTaskForm) {
-                this.closeAddTaskForm();
-            }
-        });
-
-        // Escape key to close form
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeAddTaskForm();
-            }
-        });
-    }
-
-    setupTheme() {
-        const themeBtn = document.getElementById('toggleThemeBtn');
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        const html = document.documentElement;
-        
-        // Apply saved theme immediately
-        if (savedTheme === 'dark') {
-            html.classList.add('dark');
-        } else {
-            html.classList.remove('dark');
-        }
-
-        if (themeBtn) {
-            themeBtn.addEventListener('click', () => {
-                html.classList.toggle('dark');
-                const currentMode = html.classList.contains('dark') ? 'dark' : 'light';
-                localStorage.setItem('theme', currentMode);
-                this.updateThemeIcon(themeBtn, currentMode);
-            });
-            
-            // Set initial icon
-            this.updateThemeIcon(themeBtn, savedTheme);
-        }
-    }
-
-    updateThemeIcon(btn, mode) {
-        const icon = btn.querySelector('i');
-        if (icon) {
-            if (mode === 'dark') {
-                icon.className = 'fas fa-sun';
-            } else {
-                icon.className = 'fas fa-moon';
-            }
-        }
-    }
-
-    setupScrollButton() {
-        const scrollBtn = document.getElementById('scrollTopBtn');
-        if (scrollBtn) {
-            // Show/hide button based on scroll position
-            window.addEventListener('scroll', () => {
-                if (window.scrollY > 300) {
-                    scrollBtn.classList.add('show');
-                } else {
-                    scrollBtn.classList.remove('show');
+        const menuToggle = document.getElementById('menuToggle');
+        const navContainer = document.getElementById('navContainer');
+        if (menuToggle && navContainer) {
+            menuToggle.addEventListener('click', () => {
+                navContainer.classList.toggle('active');
+                const icon = menuToggle.querySelector('i');
+                if (icon) {
+                    icon.className = navContainer.classList.contains('active') ? 'fas fa-times' : 'fas fa-bars';
                 }
             });
-
-            // Scroll to top when clicked
-            scrollBtn.addEventListener('click', () => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
         }
     }
 
-    // Performance optimizations
-    debounceSearch() {
-        if (this.searchTimeout) {
-            clearTimeout(this.searchTimeout);
-        }
-        this.searchTimeout = setTimeout(() => {
-            this.applyFiltersAndSearch();
-        }, this.config.DEBOUNCE_DELAY);
-    }
-
-    // API Methods
-    async makeRequest(action, data = {}) {
-        const params = new URLSearchParams({
-            action,
-            ...data,
-            _ts: Date.now()
-        });
-
+    async loadAllData() {
+        this.showLoading();
         try {
-            const response = await fetch(`${this.config.API_BASE_URL}?${params}`, {
-                method: 'GET',
-                mode: 'cors',
-                cache: 'no-cache'
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            return result;
-        } catch (error) {
-            console.error('API request failed:', error);
-            throw error;
-        }
-    }
+            const actions = ['getTasks', 'getPrestasi', 'getMediaPartner'];
+            const promises = actions.map(action => fetch(`${CONFIG.API_URL}?action=${action}`).then(r => r.json()));
+            const [tasks, prestasi, media] = await Promise.all(promises);
 
-    async loadTasks(forceRefresh = false) {
-        if (this.isLoading) return;
-        
-        // Check cache
-        const now = Date.now();
-        if (!forceRefresh && this.cache.data && (now - this.cache.timestamp) < this.config.CACHE_DURATION) {
-            this.tasks = this.cache.data;
-            this.applyFiltersAndSearch();
-            this.updateStats();
-            return;
-        }
-    
-        try {
-            this.isLoading = true;
-            this.showLoading();
-            
-            const response = await this.makeRequest('getTasks');
-            this.tasks = (response || []).filter(task => 
-                task && (task.task || task.platform || task.assignedTo)
-            );
-        
-            // Update cache
-            this.cache.data = this.tasks;
-            this.cache.timestamp = now;
-            
-            this.applyFiltersAndSearch();
-            this.updateStats();
-            this.hideLoading();
-        
+            this.data = { tasks, prestasi, media };
+            this.applyFilters();
+            this.showToast('Data berhasil diperbarui', 'success');
         } catch (error) {
-            console.error('Failed to load tasks:', error);
-            this.showError('Gagal memuat data tasks');
-        } finally {
-            this.isLoading = false;
-        }
-    }
-
-    async createTask(taskData) {
-        try {
-            this.showToast('Menyimpan task...', 'info');
-            const response = await this.makeRequest('createTask', { data: JSON.stringify(taskData) });
-            
-            console.log('Create task response:', response);
-            
-            if (response && (response.message || response.success || response.no)) {
-                this.showToast('Task berhasil ditambahkan', 'success');
-                this.closeAddTaskForm();
-                await this.loadTasks(true);
-            } else if (response && response.error) {
-                this.showToast(response.error, 'error');
-            } else {
-                this.showToast('Task berhasil ditambahkan', 'success');
-                this.closeAddTaskForm();
-                await this.loadTasks(true);
-            }
-        } catch (error) {
-            console.error('Failed to create task:', error);
-            this.showToast('Gagal menambahkan task', 'error');
-        }
-    }
-
-    async updateTask(taskId, taskData) {
-        try {
-            this.showToast('Menyimpan perubahan...', 'info');
-            
-            // Clear cache first
-            this.cache.data = null;
-            this.cache.timestamp = 0;
-            
-            const response = await this.makeRequest('updateTask', { 
-                id: String(taskId), 
-                data: JSON.stringify(taskData) 
-            });
-            
-            console.log('Update response:', response);
-            
-            if (response && (response.message || response.success || response.no)) {
-                this.showToast('Task berhasil diupdate', 'success');
-                this.closeAddTaskForm();
-                await this.loadTasks(true);
-            } else {
-                throw new Error(response?.error || 'Gagal mengupdate task');
-            }
-        } catch (error) {
-            console.error('Failed to update task:', error);
-            this.showToast('Gagal mengupdate task', 'error');
-        }
-    }
-
-    async deleteTask(taskId) {
-        if (!confirm('Apakah Anda yakin ingin menghapus task ini?')) {
-            return;
-        }
-    
-        try {
-            this.showLoading('Menghapus task...');
-            const response = await this.makeRequest('deleteTask', { id: String(taskId) });
-            
-            if (response && (response.message || response.success)) {
-                this.showToast('Task berhasil dihapus', 'success');
-                await this.loadTasks(true);
-            } else {
-                throw new Error(response?.error || 'Gagal menghapus task');
-            }
-        } catch (error) {
-            console.error('Failed to delete task:', error);
-            this.showToast('Gagal menghapus task', 'error');
+            this.showToast('Gagal memuat data!', 'error');
         } finally {
             this.hideLoading();
         }
     }
 
-    // UI Methods
-    applyFiltersAndSearch() {
-        let result = [...this.tasks];
-        
-        // Hide done tasks older than 30 days
-        result = result.filter(task => {
-            const isDone = (task.inProgress || '').toLowerCase() === 'done';
-            if (!isDone) return true;
-            
-            // Check if done task is older than 30 days
-            if (task.dueDate) {
-                const dueDate = new Date(task.dueDate);
-                const today = new Date();
-                const daysDiff = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
-                return daysDiff <= 30;
-            }
-            return true;
+    async clearCache() {
+        this.showLoading();
+        this.data = { tasks: [], prestasi: [], media: [] };
+        this.filteredData = { tasks: [], prestasi: [], media: [] };
+        // If there were any localStorage keys, clear them here
+        await this.loadAllData();
+        this.showToast('Cache dibersihkan', 'success');
+    }
+
+    async switchSection(sectionId, element) {
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        element.classList.add('active');
+        document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+        document.getElementById(`${sectionId}-section`).classList.add('active');
+        this.currentSection = sectionId;
+
+        // Update Dynamic Titles
+        const sectionNames = {
+            'content-planner': 'Content Planner',
+            'prestasi': 'Prestasi Mahasiswa',
+            'media-partner': 'Media Partner'
+        };
+        document.getElementById('pageTitle').textContent = sectionNames[sectionId];
+
+        // Close mobile menu if open
+        const navContainer = document.getElementById('navContainer');
+        const menuToggle = document.getElementById('menuToggle');
+        if (navContainer && navContainer.classList.contains('active')) {
+            navContainer.classList.remove('active');
+            const icon = menuToggle?.querySelector('i');
+            if (icon) icon.className = 'fas fa-bars';
+        }
+
+        if (sectionId === 'content-planner') {
+            this.applyFilters();
+        } else if (sectionId === 'prestasi') {
+            this.renderPrestasi();
+        } else if (sectionId === 'media-partner') {
+            this.renderMediaPartner();
+        }
+    }
+
+    switchView(view, element) {
+        document.querySelectorAll('.view-btn').forEach(el => el.classList.remove('active'));
+        element.classList.add('active');
+        this.currentView = view;
+
+        const monthNav = document.getElementById('monthNavigation');
+        monthNav.style.display = (view === 'monthly' || view === 'calendar') ? 'flex' : 'none';
+
+        if (window.clearSelection) window.clearSelection(); // Clear select state on view change
+        this.renderTasks();
+    }
+
+    handleSearch(val) {
+        const term = val.toLowerCase();
+        if (this.currentSection === 'content-planner') {
+            this.filteredData.tasks = this.data.tasks.filter(t =>
+                t.task.toLowerCase().includes(term) ||
+                t.assignedTo.toLowerCase().includes(term)
+            );
+            this.renderTasks();
+        } else if (this.currentSection === 'prestasi') {
+            const filtered = this.data.prestasi.filter(t =>
+                t.nama.toLowerCase().includes(term) ||
+                t.kegiatan.toLowerCase().includes(term)
+            );
+            this.renderPrestasi(filtered);
+        } else if (this.currentSection === 'media-partner') {
+            const filtered = this.data.media.filter(t =>
+                t.instansi.toLowerCase().includes(term) ||
+                t.kegiatan.toLowerCase().includes(term)
+            );
+            this.renderMediaPartner(filtered);
+        }
+    }
+
+    changeMonth(delta) {
+        this.currentDate.setMonth(this.currentDate.getMonth() + delta);
+        this.renderTasks();
+    }
+
+    applyFilters() {
+        if (this.currentSection !== 'content-planner') return;
+
+        const platform = document.getElementById('filterPlatform').value;
+        const assignee = document.getElementById('filterAssignee').value;
+        const format = document.getElementById('filterFormat').value;
+
+        this.filteredData.tasks = this.data.tasks.filter(t => {
+            return (!platform || t.platform === platform) &&
+                (!assignee || t.assignedTo === assignee) &&
+                (!format || t.format === format);
         });
-        
-        // Apply search
-        if (this.searchTerm) {
-            result = result.filter(task => {
-                const searchableText = [
-                    task.task || '',
-                    task.platform || '',
-                    task.format || '',
-                    task.assignedTo || '',
-                    task.inProgress || '',
-                    task.reference || '',
-                    task.result || '',
-                    task.notes || ''
-                ].join(' ').toLowerCase();
-                
-                return searchableText.includes(this.searchTerm);
-            });
-        }
-        
-        // Apply filters
-        if (this.filters.assignedTo) {
-            result = result.filter(task => 
-                (task.assignedTo || '').toLowerCase().includes(this.filters.assignedTo.toLowerCase())
-            );
-        }
-        
-        if (this.filters.format) {
-            result = result.filter(task => 
-                (task.format || '').toLowerCase().includes(this.filters.format.toLowerCase())
-            );
-        }
-        
-        this.filteredTasks = result;
+
         this.renderTasks();
         this.updateStats();
     }
 
     renderTasks() {
-        const tasksList = document.getElementById('tasksList');
-        if (!tasksList) return;
-        
-        if (this.filteredTasks.length === 0) {
-            this.showEmpty();
+        const container = document.getElementById('contentPlannerList');
+        container.className = this.currentView === 'calendar' ? '' : 'data-grid';
+        container.innerHTML = '';
+
+        const monthStr = this.currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+        document.getElementById('currentMonthDisplay').textContent = monthStr;
+
+        if (this.currentView === 'calendar') {
+            this.renderCalendar(container);
             return;
         }
-    
-        // Use document fragment for better performance
-        const fragment = document.createDocumentFragment();
-        const tempDiv = document.createElement('div');
-        
-        this.filteredTasks.forEach(task => {
-            tempDiv.innerHTML = this.createTaskHTML(task);
-            fragment.appendChild(tempDiv.firstElementChild);
+
+        let tasksToRender = [...this.filteredData.tasks];
+
+        if (this.currentView === 'monthly') {
+            const year = this.currentDate.getFullYear();
+            const month = this.currentDate.getMonth();
+            tasksToRender = tasksToRender.filter(t => {
+                const d = new Date(t.dueDate);
+                return d.getFullYear() === year && d.getMonth() === month;
+            });
+        }
+
+        tasksToRender.forEach(task => {
+            container.appendChild(this.createTaskCard(task));
         });
-        
-        tasksList.innerHTML = '';
-        tasksList.appendChild(fragment);
-        this.hideAllStates();
     }
 
-    createTaskHTML(task) {
-        const statusClass = this.getStatusClass(task.inProgress);
-        const deadlineClass = this.getDeadlineClass(task.dateLeft);
-        const isCompleted = (task.inProgress || '').toLowerCase() === 'done';
-        
-        // Override deadline class if task is completed
-        const finalDeadlineClass = isCompleted ? '' : deadlineClass;
-        
-        return `
-            <div class="task-item ${isCompleted ? 'completed' : ''} ${finalDeadlineClass}" data-task-id="${task.no}">
-                <div class="task-header">
-                    <div class="task-title">${this.escapeHtml(task.task || '')}</div>
-                    <div class="task-actions">
-                        <select class="status-quick-update" onchange="quickUpdateStatus(${task.no}, this.value)" title="Ubah Status">
-                            <option value="Not Done" ${task.inProgress === 'Not Done' ? 'selected' : ''}>Belum Dimulai</option>
-                            <option value="On Progress" ${task.inProgress === 'On Progress' ? 'selected' : ''}>Dalam Proses</option>
-                            <option value="Ready To Upload" ${task.inProgress === 'Ready To Upload' ? 'selected' : ''}>Siap Upload</option>
-                            <option value="Done" ${task.inProgress === 'Done' ? 'selected' : ''}>Selesai</option>
-                        </select>
-                        <button class="btn btn-icon" onclick="taskManager.editTask(${task.no})" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-icon btn-danger" onclick="taskManager.deleteTask(${task.no})" title="Hapus">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="task-meta">
-                    ${task.platform ? `<span><i class="fas fa-globe"></i> ${this.escapeHtml(task.platform)}</span>` : ''}
-                    ${task.format ? `<span><i class="fas fa-file"></i> ${this.escapeHtml(task.format)}</span>` : ''}
-                    ${task.assignedTo ? `<span><i class="fas fa-user"></i> ${this.escapeHtml(task.assignedTo)}</span>` : ''}
-                </div>
-                
-                <div class="task-status ${statusClass}">
-                    <i class="fas fa-circle"></i>
-                    ${this.escapeHtml(task.inProgress || 'Not Done')}
-                </div>
-                
-                <div class="task-deadline ${deadlineClass}">
-                    <i class="fas fa-calendar"></i>
-                    Due: ${this.formatDate(task.dueDate)}
-                    ${!isCompleted && task.dateLeft !== undefined ? `(${this.getDeadlineText(task.dateLeft)})` : ''}
-                </div>
+    createTaskCard(task) {
+        const div = document.createElement('div');
+        div.className = 'grid-card';
+        const isDone = task.inProgress === 'Done';
+
+        div.innerHTML = `
+            <div class="grid-card-header">
+                <input type="checkbox" class="task-checkbox" 
+                       data-task-id="${task.no}" 
+                       onclick="event.stopPropagation(); toggleTaskSelection(${task.no})"
+                       style="margin-right: 12px; width: 18px; height: 18px; cursor: pointer;">
+                <h3 style="flex: 1;">${task.task}</h3>
+                <select class="status-dropdown" onchange="app.quickUpdateStatus(${task.no}, this.value)" onclick="event.stopPropagation()">
+                    <option value="Not Done" ${task.inProgress === 'Not Done' ? 'selected' : ''}>Not Done</option>
+                    <option value="On Progress" ${task.inProgress === 'On Progress' ? 'selected' : ''}>In Progress</option>
+                    <option value="Ready To Upload" ${task.inProgress === 'Ready To Upload' ? 'selected' : ''}>Ready</option>
+                    <option value="Done" ${task.inProgress === 'Done' ? 'selected' : ''}>Selesai</option>
+                </select>
+            </div>
+            <div class="grid-info-row"><i class="fas fa-user"></i> ${task.assignedTo}</div>
+            <div class="grid-info-row"><i class="fas fa-calendar"></i> ${task.dueDate}</div>
+            <div class="grid-info-row"><i class="fas fa-bullseye"></i> ${task.platform} - ${task.format}</div>
+            <div style="margin-top:auto; display:flex; gap:10px; justify-content:flex-end;">
+                <button class="btn-text btn-edit" onclick="event.stopPropagation(); app.editTask(${task.no})">Edit</button>
+                <button class="btn-text btn-delete" onclick="event.stopPropagation(); app.deleteTask(${task.no})">Hapus</button>
             </div>
         `;
+        div.onclick = () => this.showTaskDetail(task);
+        return div;
     }
 
-    getStatusClass(status) {
-        const s = (status || '').toLowerCase();
-        if (s === 'done') return 'done';
-        if (s === 'on progress') return 'on-progress';
-        if (s === 'ready to upload') return 'ready';
-        return 'not-done';
+    renderCalendar(container) {
+        container.innerHTML = `<div class="calendar-container">
+            <div class="calendar-grid" id="calendarGridMain"></div>
+        </div>`;
+
+        const grid = document.getElementById('calendarGridMain');
+        const labels = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+        labels.forEach(l => grid.innerHTML += `<div class="calendar-day-label">${l}</div>`);
+
+        const year = this.currentDate.getFullYear();
+        const month = this.currentDate.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const lastDate = new Date(year, month + 1, 0).getDate();
+
+        for (let i = 0; i < firstDay; i++) grid.innerHTML += `<div class="calendar-cell"></div>`;
+
+        const today = new Date();
+        const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+
+        for (let d = 1; d <= lastDate; d++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const tasks = this.filteredData.tasks.filter(t => t.dueDate === dateStr);
+            let tasksHtml = tasks.map(t => `<div class="calendar-task" onclick="event.stopPropagation(); app.showTaskDetail(${JSON.stringify(t).replace(/"/g, '&quot;')})">${t.task}</div>`).join('');
+
+            grid.innerHTML += `<div class="calendar-cell ${isCurrentMonth && d === today.getDate() ? 'today' : ''}">
+                <div class="calendar-date">${d}</div>
+                ${tasksHtml}
+            </div>`;
+        }
     }
 
-    getDeadlineClass(dateLeft) {
-        if (dateLeft < 0) return 'overdue';
-        if (dateLeft <= 3) return 'urgent';
-        return '';
+    renderPrestasi(prestasiToRender = null) {
+        const grid = document.getElementById('prestasiGrid');
+        grid.innerHTML = '';
+        const items = prestasiToRender || this.data.prestasi;
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'grid-card';
+            const timeDisplay = window.formatRelativeTime ? window.formatRelativeTime(item.timestamp) : item.timestamp;
+            card.innerHTML = `
+                <h3>${item.nama}</h3>
+                <div class="grid-info-row"><i class="fas fa-id-card"></i> ${item.npm}</div>
+                <div class="grid-info-row"><i class="fas fa-trophy"></i> ${item.kegiatan}</div>
+                <div class="grid-info-row"><i class="fas fa-layer-group"></i> ${item.tingkat}</div>
+                <div class="grid-info-row"><i class="fas fa-clock"></i> ${timeDisplay}</div>
+            `;
+            card.onclick = () => this.showPrestasiDetail(item);
+            grid.appendChild(card);
+        });
     }
 
-    getDeadlineText(dateLeft) {
-        if (dateLeft < 0) return `${Math.abs(dateLeft)} hari terlambat`;
-        if (dateLeft === 0) return 'Hari ini';
-        if (dateLeft <= 3) return `${dateLeft} hari lagi`;
-        return `${dateLeft} hari lagi`;
+    renderMediaPartner(mediaToRender = null) {
+        const grid = document.getElementById('mediaPartnerGrid');
+        grid.innerHTML = '';
+        const items = mediaToRender || this.data.media;
+        items.forEach(item => {
+            const hasProposal = item.proposal && item.proposal.length > 5;
+            const hasSurat = item.surat && item.surat.length > 5;
+            const taskCreated = item.taskCreated === 'TRUE';
+
+            const card = document.createElement('div');
+            card.className = 'grid-card';
+            card.innerHTML = `
+                <h3>
+                    ${item.kegiatan}
+                    ${taskCreated ? '<span class="badge-created">✓ Task Dibuat</span>' : ''}
+                </h3>
+                <div class="grid-info-row"><i class="fas fa-building"></i> ${item.instansi}</div>
+                <div class="grid-info-row">
+                    <i class="fas fa-check-circle" style="color: ${hasProposal ? 'var(--primary)' : 'var(--text-muted)'}"></i> Proposal
+                    <i class="fas fa-check-circle" style="color: ${hasSurat ? 'var(--primary)' : 'var(--text-muted)'}" style="margin-left:10px"></i> Surat
+                </div>
+                <div style="margin-top:auto; display:flex; gap:10px;">
+                    <button class="btn btn-primary" style="font-size:0.75rem; flex:1" 
+                            onclick="event.stopPropagation(); app.automateTask(${JSON.stringify(item).replace(/"/g, '&quot;')})"
+                            ${taskCreated ? 'disabled' : ''}>
+                        <i class="fas fa-magic"></i> ${taskCreated ? 'Sudah Ditambahkan' : 'Auto Planner'}
+                    </button>
+                </div>
+            `;
+            card.onclick = () => this.showMediaDetail(item);
+            grid.appendChild(card);
+        });
     }
 
     updateStats() {
-        // Always count from all tasks, not filtered tasks
-        const allTasks = this.tasks;
-        const displayedTasks = this.filteredTasks.length > 0 ? this.filteredTasks : this.tasks;
-        
-        // Count all tasks for statistics
-        const total = allTasks.length;
-        const completed = allTasks.filter(task => (task.inProgress || '').toLowerCase() === 'done').length;
-        const inProgress = allTasks.filter(task => (task.inProgress || '').toLowerCase() === 'on progress').length;
-        
-        // Hanya hitung urgent untuk task yang belum done dan yang ditampilkan
-        const urgent = displayedTasks.filter(task => {
-            const isDone = (task.inProgress || '').toLowerCase() === 'done';
-            const isUrgent = task.dateLeft !== undefined && task.dateLeft <= 3 && task.dateLeft >= 0;
-            return !isDone && isUrgent;
-        }).length;
-        
-        this.updateElement('totalTasks', total);
-        this.updateElement('completedTasks', completed);
-        this.updateElement('inProgressTasks', inProgress);
-        this.updateElement('urgentTasks', urgent);
+        const tasks = this.filteredData.tasks;
+        document.getElementById('totalTasks').textContent = tasks.length;
+        document.getElementById('completedTasks').textContent = tasks.filter(t => t.inProgress === 'Done').length;
+        document.getElementById('inProgressTasks').textContent = tasks.filter(t => t.inProgress === 'On Progress' || t.inProgress === 'Ready To Upload').length;
+
+        const urgent = tasks.filter(t => t.inProgress !== 'Done' && t.dateLeft !== undefined && t.dateLeft <= 3).length;
+        document.getElementById('urgentTasks').textContent = urgent;
     }
 
-    updateElement(id, value) {
-        const element = document.getElementById(id);
-        if (element) {
-            element.textContent = value;
-        }
-    }
-
-    // Form Methods
-    openAddTaskForm() {
-        const form = document.getElementById('addTaskForm');
-        if (form) {
-            form.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-            this.resetForm();
-        }
-    }
-
-    closeAddTaskForm() {
-        const form = document.getElementById('addTaskForm');
-        if (form) {
-            form.style.display = 'none';
-            document.body.style.overflow = '';
-            this.resetForm();
-            
-            // Reset form header
-            const formHeader = document.querySelector('.form-header h3');
-            if (formHeader) {
-                formHeader.innerHTML = '<i class="fas fa-plus"></i> Tambah Task Baru';
-            }
-        }
-    }
-
-    resetForm() {
-        const form = document.getElementById('taskForm');
-        if (form) {
-            form.reset();
-            this.clearFormErrors();
-        }
-    }
-
-    async handleSubmitTask(e) {
+    // --- ACTIONS ---
+    async handleTaskSubmit(e) {
         e.preventDefault();
-        
         const formData = new FormData(e.target);
-        const taskData = {
-            task: formData.get('task'),
-            platform: formData.get('platform'),
-            format: formData.get('format'),
-            assignedTo: formData.get('assignedTo'),
-            dueDate: formData.get('dueDate'),
-            inProgress: formData.get('inProgress'),
-            reference: formData.get('reference'),
-            result: formData.get('result'),
-            notes: formData.get('notes')
-        };
-        
-        if (!this.validateTask(taskData)) {
-            return;
-        }
-    
-        // Check if this is an edit operation
+        const taskData = Object.fromEntries(formData.entries());
         const taskId = e.target.dataset.taskId;
-        if (taskId) {
-            await this.updateTask(taskId, taskData);
-        } else {
-            await this.createTask(taskData);
-        }
-    }
 
-    validateTask(data) {
-        this.clearFormErrors();
-        let isValid = true;
-    
-        const requiredFields = ['task', 'assignedTo', 'dueDate', 'inProgress'];
-    
-        requiredFields.forEach(field => {
-            if (!data[field] || String(data[field]).trim() === '') {
-                this.showFieldError(field, `${field} harus diisi`);
-                isValid = false;
-            }
-        });
-    
-        // Date validation - only validate if date is provided and not empty
-        if (data.dueDate && data.dueDate.trim() !== '') {
-            const selectedDate = new Date(data.dueDate + 'T00:00:00');
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            if (selectedDate < today) {
-                this.showFieldError('dueDate', 'Due date tidak boleh di masa lalu');
-                isValid = false;
-            }
-        }
-    
-        return isValid;
-    }
-
-    showFieldError(field, message) {
-        const errorElement = document.getElementById(`${field}Error`);
-        if (errorElement) {
-            errorElement.textContent = message;
-        }
-    }
-
-    clearFormErrors() {
-        const errorElements = document.querySelectorAll('.error-message');
-        errorElements.forEach(element => {
-            element.textContent = '';
-        });
-    }
-
-// Task Actions
-    async editTask(taskId) {
-        const task = this.tasks.find(t => t.no == taskId);
-        if (!task) return;
-        
-        // Open the form with pre-filled data
-        this.openAddTaskForm();
-        this.populateForm(task);
-        
-        // Update form header to indicate edit mode
-        const formHeader = document.querySelector('.form-header h3');
-        if (formHeader) {
-            formHeader.innerHTML = '<i class="fas fa-edit"></i> Edit Task';
-        }
-    }
-
-    async quickUpdateStatus(taskId, newStatus) {
+        this.showLoading();
+        this.showToast('Sedang menyimpan...', 'info');
         try {
-            this.showToast('Mengupdate status...', 'info');
-            
-            // Clear cache first
-            this.cache.data = null;
-            this.cache.timestamp = 0;
-            
-            const response = await this.makeRequest('updateTask', { 
-                id: String(taskId), 
-                data: JSON.stringify({ inProgress: newStatus }) 
-            });
-            
-            console.log('Quick update response:', response);
-            
-            if (response && (response.message || response.success || response.no)) {
-                this.showToast('Status berhasil diupdate', 'success');
-                await this.loadTasks(true);
-            } else {
-                throw new Error(response?.error || 'Gagal mengupdate status');
-            }
+            const action = taskId ? `updateTask&id=${taskId}` : 'createTask';
+            await fetch(`${CONFIG.API_URL}?action=${action}&data=${encodeURIComponent(JSON.stringify(taskData))}`);
+            this.showToast('Berhasil disimpan!', 'success');
+            this.closeModal();
+            await this.loadAllData();
         } catch (error) {
-            console.error('Failed to update status:', error);
-            this.showToast('Gagal mengupdate status', 'error');
+            this.showToast('Gagal menyimpan!', 'error');
+        } finally {
+            this.hideLoading();
         }
     }
 
-    populateForm(task) {
-        const fields = ['task', 'platform', 'format', 'assignedTo', 'dueDate', 'inProgress', 'reference', 'result', 'notes'];
-        fields.forEach(field => {
-            const element = document.getElementById(`${field}Input`);
-            if (element) {
-                element.value = task[field] || '';
-            }
-        });
-        
-        // Store task ID for update
+    editTask(id) {
+        const task = this.data.tasks.find(t => t.no == id);
+        if (!task) return;
+
         const form = document.getElementById('taskForm');
-        if (form) {
-            form.dataset.taskId = task.no;
-        }
+        form.dataset.taskId = id;
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Task';
+
+        // Fill form
+        Object.keys(task).forEach(key => {
+            const input = form.querySelector(`[name="${key}"]`);
+            if (input) input.value = task[key];
+        });
+
+        this.openModal();
     }
 
-    // State Management
-    showLoading(message = 'Memuat data...') {
-        this.hideAllStates();
-        const loadingState = document.getElementById('loadingState');
-        const loadingOverlay = document.getElementById('loadingOverlay');
-        const loadingMessage = document.getElementById('loadingMessage');
-        
-        if (loadingState) {
-            loadingState.style.display = 'flex';
-        }
-        
-        if (loadingOverlay) {
-            loadingOverlay.style.display = 'flex';
-        }
-        
-        if (loadingMessage) {
-            loadingMessage.textContent = message;
-        }
-    }
-
-    hideLoading() {
-        const loadingState = document.getElementById('loadingState');
-        const loadingOverlay = document.getElementById('loadingOverlay');
-        
-        if (loadingState) {
-            loadingState.style.display = 'none';
-        }
-        
-        if (loadingOverlay) {
-            loadingOverlay.style.display = 'none';
-        }
-    }
-
-    showError(message) {
-        this.hideAllStates();
-        const errorState = document.getElementById('errorState');
-        const errorMessage = document.getElementById('errorMessage');
-        if (errorState) {
-            errorState.style.display = 'flex';
-        }
-        if (errorMessage) {
-            errorMessage.textContent = message;
-        }
-    }
-
-    showEmpty() {
-        this.hideAllStates();
-        const emptyState = document.getElementById('emptyState');
-        if (emptyState) {
-            emptyState.style.display = 'flex';
-        }
-    }
-
-    hideAllStates() {
-        const states = ['loadingState', 'errorState', 'emptyState'];
-        states.forEach(state => {
-            const element = document.getElementById(state);
-            if (element) {
-                element.style.display = 'none';
+    async deleteTask(id) {
+        // Show custom confirmation notification
+        this.showConfirmNotification('Apakah Anda yakin ingin menghapus task ini?', async () => {
+            this.showLoading();
+            this.showToast('Menghapus...', 'info');
+            try {
+                await fetch(`${CONFIG.API_URL}?action=deleteTask&id=${id}`);
+                this.showToast('Berhasil dihapus', 'success');
+                await this.loadAllData();
+            } catch (error) {
+                this.showToast('Gagal menghapus', 'error');
+            } finally {
+                this.hideLoading();
             }
         });
     }
 
-    showToast(message, type = 'info') {
-        const container = document.getElementById('toastContainer');
-        if (!container) return;
-        
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-    
-        const icon = type === 'success' ? 'fas fa-check-circle' :
-                     type === 'error' ? 'fas fa-exclamation-circle' :
-                     type === 'warning' ? 'fas fa-exclamation-triangle' :
-                     'fas fa-info-circle';
-    
-        toast.innerHTML = `
-            <i class="toast-icon ${icon}"></i>
-            <span class="toast-message">${message}</span>
-            <button class="toast-close" onclick="this.parentElement.remove()">
-                <i class="fas fa-times"></i>
-            </button>
+    async quickUpdateStatus(no, status) {
+        this.showToast('Mengupdate status...', 'info');
+        try {
+            await fetch(`${CONFIG.API_URL}?action=updateTask&id=${no}&data=${encodeURIComponent(JSON.stringify({ inProgress: status }))}`);
+            this.showToast('Status diperbarui!', 'success');
+            const task = this.data.tasks.find(t => t.no == no);
+            if (task) task.inProgress = status;
+            this.updateStats();
+        } catch (e) {
+            this.showToast('Gagal update status', 'error');
+        }
+    }
+
+    async automateTask(item) {
+        const taskData = {
+            task: `Media Partner (${item.kegiatan})`,
+            platform: 'Instagram',
+            format: 'Feeds',
+            assignedTo: 'Design Creator',
+            dueDate: item.publikasi || '',
+            inProgress: 'Not Done',
+            notes: `Kegiatan: ${item.kegiatan}\nInstansi: ${item.instansi}`
+        };
+
+        this.showToast('Menambah ke Content Planner...', 'info');
+        try {
+            await fetch(`${CONFIG.API_URL}?action=createTask&data=${encodeURIComponent(JSON.stringify(taskData))}`);
+            this.showToast('Berhasil ditambahkan ke Planner!', 'success');
+            await this.loadAllData();
+        } catch (e) {
+            this.showToast('Gagal otomasi!', 'error');
+        }
+    }
+
+    // --- POPUPS ---
+    showTaskDetail(task) {
+        const body = `
+            <div class="detail-row"><span class="detail-label">Task</span><div class="detail-content">${task.task}</div></div>
+            <div class="detail-row"><span class="detail-label">Platform/Format</span><div class="detail-content">${task.platform} - ${task.format}</div></div>
+            <div class="detail-row"><span class="detail-label">Reference</span><div class="detail-content">${task.reference || '-'}</div></div>
+            <div class="detail-row"><span class="detail-label">Result</span><div class="detail-content">${task.result || '-'}</div></div>
+            <div class="detail-row"><span class="detail-label">Notes</span><div class="detail-content">${task.notes || '-'}</div></div>
         `;
-    
-        container.appendChild(toast);
-    
-        // Auto remove after 5 seconds
-        setTimeout(() => {
-            if (toast.parentElement) {
-                toast.remove();
-            }
-        }, 5000);
+        this.showModalDetail('Detail Task', body);
     }
 
-    // Utility Methods
-    formatDate(dateString) {
-        if (!dateString) return '-';
-        
-        if (typeof dateString === 'string' && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            const [year, month, day] = dateString.split('-');
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-            return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
-        }
-        
-        const date = new Date(dateString);
-        return date.toLocaleDateString('id-ID', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
+    showPrestasiDetail(item) {
+        const body = Object.entries(item).map(([k, v]) => `
+            <div class="detail-row"><span class="detail-label">${k.toUpperCase()}</span><div class="detail-content">${v || '-'}</div></div>
+        `).join('');
+        this.showModalDetail('Detail Prestasi', body);
     }
 
-    escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    showMediaDetail(item) {
+        const body = Object.entries(item).map(([k, v]) => `
+            <div class="detail-row"><span class="detail-label">${k.toUpperCase()}</span><div class="detail-content">${v || '-'}</div></div>
+        `).join('');
+        this.showModalDetail('Detail Media Partner', body);
+    }
+
+    showModalDetail(title, body) {
+        document.getElementById('detailModalTitle').textContent = title;
+        document.getElementById('detailModalBody').innerHTML = body;
+        document.getElementById('detailModal').style.display = 'flex';
+    }
+
+    // --- UI TOOLS ---
+    openModal() {
+        document.getElementById('taskModal').style.display = 'flex';
+    }
+
+    closeModal() {
+        document.getElementById('taskModal').style.display = 'none';
+        document.getElementById('taskForm').reset();
+        delete document.getElementById('taskForm').dataset.taskId;
+    }
+
+    showLoading() { document.getElementById('loadingStateContent').style.display = 'flex'; }
+    hideLoading() { document.getElementById('loadingStateContent').style.display = 'none'; }
+
+    showToast(m, t) {
+        const cont = document.getElementById('toastContainer');
+        const d = document.createElement('div'); d.className = `toast ${t}`; d.textContent = m;
+        cont.appendChild(d); setTimeout(() => d.remove(), 4000);
     }
 }
 
-// Global functions for HTML onclick handlers
-function openAddTaskForm() {
-    taskManager.openAddTaskForm();
-}
+// Global scope initialization
+let app;
+document.addEventListener('DOMContentLoaded', () => {
+    app = new AppManager();
+});
 
-function closeAddTaskForm() {
-    taskManager.closeAddTaskForm();
-}
+// Helper functions for HTML
+window.switchSection = (id, el) => app.switchSection(id, el);
+window.openModal = () => app.openModal();
+window.closeModal = () => app.closeModal();
+window.handleSearch = (val) => app.handleSearch(val);
 
-function refreshTasks() {
-    taskManager.loadTasks(true);
-}
+// Add showConfirmNotification method to AppManager
+AppManager.prototype.showConfirmNotification = function (message, onConfirm) {
+    const notification = document.createElement('div');
+    notification.className = 'confirm-notification';
+    notification.innerHTML = `
+        <div class="confirm-content">
+            <p>${message}</p>
+            <div class="confirm-buttons">
+                <button class="btn-confirm-cancel">Batal</button>
+                <button class="btn-confirm-ok">Ya, Hapus</button>
+            </div>
+        </div>
+    `;
 
-function handleSearch() {
-    // Handled by event listener
-}
+    document.body.appendChild(notification);
 
-function applyFilters() {
-    // Handled by event listener
-}
+    // Animate in
+    setTimeout(() => notification.classList.add('show'), 10);
 
-// Global function for quick status update
-window.quickUpdateStatus = function(taskId, newStatus) {
-    taskManager.quickUpdateStatus(taskId, newStatus);
+    // Handle buttons
+    notification.querySelector('.btn-confirm-cancel').onclick = () => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    };
+
+    notification.querySelector('.btn-confirm-ok').onclick = () => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+        onConfirm();
+    };
 };
 
-// Initialize the application
-let taskManager;
+// Bulk Task Management
+let bulkTasksArray = [];
 
-document.addEventListener('DOMContentLoaded', function() {
-    taskManager = new TaskManager();
-});
+window.openBulkModal = () => {
+    document.getElementById('bulkModal').style.display = 'flex';
+    bulkTasksArray = [];
+    document.getElementById('bulkTaskList').style.display = 'none';
+    document.getElementById('bulkTaskItems').innerHTML = '';
+    document.getElementById('bulkCount').textContent = '0';
+    document.getElementById('saveBulkBtn').disabled = true;
+    document.getElementById('bulkTaskForm').reset();
+};
+
+window.closeBulkModal = () => {
+    document.getElementById('bulkModal').style.display = 'none';
+    bulkTasksArray = [];
+};
+
+window.addTaskToBulkList = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const taskData = Object.fromEntries(formData.entries());
+
+    // Add to array
+    bulkTasksArray.push(taskData);
+
+    // Update UI
+    updateBulkTaskList();
+
+    // Reset form
+    e.target.reset();
+
+    // Show success feedback
+    app.showToast(`Task "${taskData.task}" ditambahkan ke daftar`, 'success');
+};
+
+function updateBulkTaskList() {
+    const listContainer = document.getElementById('bulkTaskList');
+    const itemsContainer = document.getElementById('bulkTaskItems');
+    const countSpan = document.getElementById('bulkCount');
+    const saveBtn = document.getElementById('saveBulkBtn');
+
+    if (bulkTasksArray.length > 0) {
+        listContainer.style.display = 'block';
+        saveBtn.disabled = false;
+        countSpan.textContent = bulkTasksArray.length;
+
+        itemsContainer.innerHTML = bulkTasksArray.map((task, index) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px;">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; margin-bottom: 4px;">${task.task}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                        ${task.platform} • ${task.format} • ${task.assignedTo} • ${task.dueDate}
+                    </div>
+                </div>
+                <button onclick="removeBulkTask(${index})" class="btn-text btn-delete" style="padding: 6px 12px; font-size: 0.8rem;">
+                    Hapus
+                </button>
+            </div>
+        `).join('');
+    } else {
+        listContainer.style.display = 'none';
+        saveBtn.disabled = true;
+    }
+}
+
+window.removeBulkTask = (index) => {
+    bulkTasksArray.splice(index, 1);
+    updateBulkTaskList();
+    app.showToast('Task dihapus dari daftar', 'info');
+};
+
+window.saveBulkTasks = async () => {
+    if (bulkTasksArray.length === 0) {
+        app.showToast('Tidak ada task untuk disimpan', 'error');
+        return;
+    }
+
+    app.showLoading();
+    app.showToast(`Menyimpan ${bulkTasksArray.length} task...`, 'info');
+
+    try {
+        // Save all tasks
+        const promises = bulkTasksArray.map(taskData =>
+            fetch(`${CONFIG.API_URL}?action=createTask&data=${encodeURIComponent(JSON.stringify(taskData))}`)
+        );
+
+        await Promise.all(promises);
+
+        app.showToast(`Berhasil menyimpan ${bulkTasksArray.length} task!`, 'success');
+        closeBulkModal();
+        await app.loadAllData();
+    } catch (error) {
+        app.showToast('Gagal menyimpan beberapa task', 'error');
+    } finally {
+        app.hideLoading();
+    }
+};
+
+// Bulk Selection Management
+let selectedTasks = new Set();
+
+window.toggleTaskSelection = (taskId) => {
+    if (selectedTasks.has(taskId)) {
+        selectedTasks.delete(taskId);
+    } else {
+        selectedTasks.add(taskId);
+    }
+    updateBulkActionBar();
+};
+
+window.selectAllTasks = () => {
+    const checkboxes = document.querySelectorAll('.task-checkbox');
+    checkboxes.forEach(cb => {
+        const taskId = parseInt(cb.dataset.taskId);
+        selectedTasks.add(taskId);
+        cb.checked = true;
+    });
+    updateBulkActionBar();
+};
+
+window.clearSelection = () => {
+    selectedTasks.clear();
+    document.querySelectorAll('.task-checkbox').forEach(cb => cb.checked = false);
+    updateBulkActionBar();
+};
+
+function updateBulkActionBar() {
+    const bar = document.getElementById('bulkActionBar');
+    const count = document.getElementById('selectedCount');
+
+    if (selectedTasks.size > 0) {
+        bar.style.display = 'block';
+        count.textContent = `${selectedTasks.size} task dipilih`;
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+window.applyBulkStatusChange = async () => {
+    const status = document.getElementById('bulkStatusChange').value;
+    if (!status || selectedTasks.size === 0) {
+        app.showToast('Pilih status terlebih dahulu', 'error');
+        return;
+    }
+
+    app.showLoading();
+    app.showToast(`Mengubah status ${selectedTasks.size} task...`, 'info');
+
+    try {
+        const promises = Array.from(selectedTasks).map(taskId =>
+            fetch(`${CONFIG.API_URL}?action=updateTask&id=${taskId}&data=${encodeURIComponent(JSON.stringify({ inProgress: status }))}`)
+        );
+        await Promise.all(promises);
+        app.showToast(`${selectedTasks.size} task berhasil diupdate`, 'success');
+        clearSelection();
+        await app.loadAllData();
+    } catch (error) {
+        app.showToast('Gagal update beberapa task', 'error');
+    } finally {
+        app.hideLoading();
+    }
+};
+
+window.bulkDeleteTasks = () => {
+    if (selectedTasks.size === 0) return;
+
+    app.showConfirmNotification(
+        `Hapus ${selectedTasks.size} task yang dipilih?`,
+        async () => {
+            app.showLoading();
+            try {
+                const promises = Array.from(selectedTasks).map(taskId =>
+                    fetch(`${CONFIG.API_URL}?action=deleteTask&id=${taskId}`)
+                );
+                await Promise.all(promises);
+                app.showToast(`${selectedTasks.size} task berhasil dihapus`, 'success');
+                clearSelection();
+                await app.loadAllData();
+            } catch (error) {
+                app.showToast('Gagal hapus beberapa task', 'error');
+            } finally {
+                app.hideLoading();
+            }
+        }
+    );
+};
+
+// Relative Time Formatting
+window.formatRelativeTime = (timestamp) => {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 15) {
+        if (diffDays === 0) return 'Hari ini';
+        if (diffDays === 1) return 'Kemarin';
+        return `${diffDays} hari yang lalu`;
+    } else {
+        return date.toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+    }
+};
+
+window.closeDetailModal = () => document.getElementById('detailModal').style.display = 'none';
+window.switchView = (view, el) => app.switchView(view, el);
+window.applyFilters = () => app.applyFilters();

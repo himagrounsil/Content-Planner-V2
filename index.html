@@ -1,277 +1,442 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Management - Modern & Simple</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#10b981">
+    <meta name="description" content="Dashboard monitoring Program Kerja dan Konten Media Sosial HIMAGRO">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CMS HIMAGRO">
+
+    <title>HIMAGRO Content Management System</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="Logo/Logo Kominfo.png">
+    <link rel="apple-touch-icon" href="Logo/Logo Kominfo.png">
+
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
-    <!-- Header -->
-    <header class="header">
-        <div class="container">
-            <div class="header-content">
-                <div class="header-info">
-                    <h1><i class="fas fa-tasks"></i> Task Manager</h1>
-                    <p>Kelola task dengan mudah dan efisien</p>
-                </div>
-                <div class="header-actions">
-                    <div class="header-logos">
-                        <img src="Logo\LOGO-UNSIL.png" alt="UNSIL" class="logo-sm" />
-                        <img src="Logo\Logo-HIMAGRO.png" alt="HIMAGRO" class="logo-sm" />
-                        <img src="Logo\Logo-CitaSaswahita Tanpa BG.png" alt="Cita Saswahita" class="logo-sm" />
-                    </div>
-                    <button class="btn btn-icon" id="toggleThemeBtn" title="Toggle theme">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                    <button class="btn btn-primary" onclick="openAddTaskForm()">
-                        <i class="fas fa-plus"></i>
-                        <span>Tambah Task</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="main">
-        <div class="container">
-            <!-- Stats Cards -->
+<body>
+    <!-- Global Loading Overlay -->
+    <div id="loadingStateContent" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <button class="mobile-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <div class="sidebar-logo">
+                <div class="logo-group">
+                    <img src="Logo/LOGO-UNSIL.png" alt="UNSIL">
+                    <img src="Logo/Logo-HIMAGRO.png" alt="HIMAGRO">
+                    <img src="Logo/Logo-CitaSaswahita Tanpa BG.png" alt="Cita Saswahita">
+                </div>
+                <h2>CMS HIMAGRO</h2>
+            </div>
+
+            <!-- Spacer for mobile centering -->
+            <div class="mobile-spacer"></div>
+        </div>
+
+        <nav class="nav-container" id="navContainer">
+            <ul class="nav-menu">
+                <li class="nav-item active" onclick="switchSection('content-planner', this)">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Content Planner</span>
+                </li>
+                <li class="nav-item" onclick="switchSection('prestasi', this)">
+                    <i class="fas fa-trophy"></i>
+                    <span>Prestasi Mahasiswa</span>
+                </li>
+                <li class="nav-item" onclick="switchSection('media-partner', this)">
+                    <i class="fas fa-handshake"></i>
+                    <span>Media Partner</span>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <button class="action-btn" onclick="app.loadAllData()">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Refresh Data</span>
+                </button>
+                <button class="action-btn" onclick="app.clearCache()">
+                    <i class="fas fa-eraser"></i>
+                    <span>Clear Cache</span>
+                </button>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-wrapper">
+        <!-- Welcome Banner -->
+        <header class="welcome-banner">
+            <h1 id="pageTitle">Content Management System</h1>
+            <p id="pageSubtitle">Dashboard monitoring Program Kerja dan Konten Media Sosial HIMAGRO</p>
+        </header>
+
+        <!-- Dynamic Content Sections -->
+
+        <!-- SECTION 1: CONTENT PLANNER -->
+        <section id="content-planner-section" class="section active">
+            <!-- Stats -->
             <div class="stats-grid">
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-list-check"></i>
-                    </div>
+                    <div class="stat-icon"><i class="fas fa-tasks"></i></div>
                     <div class="stat-info">
-                        <p class="stat-label">Total Tasks</p>
+                        <p class="stat-label">Total Task</p>
                         <p class="stat-value" id="totalTasks">0</p>
                     </div>
                 </div>
-                
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
+                    <div class="stat-icon"><i class="fas fa-check-double"></i></div>
                     <div class="stat-info">
                         <p class="stat-label">Selesai</p>
                         <p class="stat-value" id="completedTasks">0</p>
                     </div>
                 </div>
-                
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-clock"></i>
-                    </div>
+                    <div class="stat-icon"><i class="fas fa-spinner"></i></div>
                     <div class="stat-info">
-                        <p class="stat-label">Dalam Proses</p>
+                        <p class="stat-label">In Progress</p>
                         <p class="stat-value" id="inProgressTasks">0</p>
                     </div>
                 </div>
-                
                 <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="fas fa-exclamation-triangle"></i>
+                    <div class="stat-icon" style="color: var(--warning);"><i class="fas fa-exclamation-circle"></i>
                     </div>
                     <div class="stat-info">
-                        <p class="stat-label">Deadline Mendesak</p>
+                        <p class="stat-label">Urgent</p>
                         <p class="stat-value" id="urgentTasks">0</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Search and Filter -->
-            <div class="search-filter-bar">
+            <!-- Action Bar Row 1: Search & Filters -->
+            <div class="action-bar" id="plannerActionBar">
                 <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Cari task..." onkeyup="handleSearch()">
+                    <input type="text" placeholder="Cari konten..." onkeyup="handleSearch(this.value)">
                 </div>
                 <div class="filter-group">
-                    <select id="assignedToFilter" onchange="applyFilters()">
-                        <option value="">Semua Assignee</option>
+                    <select id="filterPlatform" onchange="app.applyFilters()">
+                        <option value="">Platform</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="TikTok">TikTok</option>
+                        <option value="YouTube">YouTube</option>
+                    </select>
+                    <select id="filterAssignee" onchange="app.applyFilters()">
+                        <option value="">Assigned To</option>
                         <option value="Content Writer">Content Writer</option>
                         <option value="Design Creator">Design Creator</option>
-                        <option value="Relation And Archive">Relation And Archive</option>
-                        <option value="Room Of Documentary">Room Of Documentary</option>
                         <option value="Social Media">Social Media</option>
                     </select>
-                    <select id="formatFilter" onchange="applyFilters()">
-                        <option value="">Semua Format</option>
-                        <option value="Article">Article</option>
-                        <option value="Caption">Caption</option>
-                        <option value="Carousel">Carousel</option>
+                    <select id="filterFormat" onchange="app.applyFilters()">
+                        <option value="">Format</option>
                         <option value="Feeds">Feeds</option>
-                        <option value="Feeds (Grid)">Feeds (Grid)</option>
-                        <option value="Foto">Foto</option>
-                        <option value="Journal">Journal</option>
+                        <option value="Reels">Reels</option>
+                        <option value="Carousel">Carousel</option>
                         <option value="Story">Story</option>
-                        <option value="Video">Video</option>
                     </select>
-                    <button class="btn btn-secondary" onclick="refreshTasks()">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
                 </div>
-            </div>
-
-            <!-- Tasks Container -->
-            <div class="tasks-container">
-                <!-- Loading State -->
-                <div id="loadingState" class="loading-state">
-                    <div class="spinner"></div>
-                    <p>Memuat data...</p>
-                </div>
-
-                <!-- Error State -->
-                <div id="errorState" class="error-state" style="display: none;">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <p id="errorMessage">Gagal memuat data</p>
-                    <button class="btn btn-primary" onclick="refreshTasks()">Coba Lagi</button>
-                </div>
-
-                <!-- Empty State -->
-                <div id="emptyState" class="empty-state" style="display: none;">
-                    <i class="fas fa-clipboard-list"></i>
-                    <h3>Belum ada task</h3>
-                    <p>Klik tombol "Tambah Task" untuk memulai</p>
-                </div>
-
-                <!-- Tasks List -->
-                <div id="tasksList" class="tasks-list">
-                    <!-- Tasks will be populated here -->
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Add Task Form (Inline) -->
-    <div id="addTaskForm" class="add-task-form" style="display: none;">
-        <div class="form-container">
-            <div class="form-header">
-                <h3><i class="fas fa-plus"></i> Tambah Task Baru</h3>
-                <button class="btn btn-icon" onclick="closeAddTaskForm()">
-                    <i class="fas fa-times"></i>
+                <button class="btn btn-primary" onclick="openModal()" style="padding:10px 20px; border-radius:10px;">
+                    <i class="fas fa-plus"></i> Tambah Task
+                </button>
+                <button class="btn" onclick="openBulkModal()"
+                    style="padding:10px 20px; border-radius:10px; background: rgba(16, 185, 129, 0.2); border: 1px solid var(--primary); color: var(--primary);">
+                    <i class="fas fa-layer-group"></i> Tambah Banyak
                 </button>
             </div>
-            <form id="taskForm" class="task-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="taskInput">Task <span class="required">*</span></label>
-                        <textarea id="taskInput" name="task" required placeholder="Deskripsi task..."></textarea>
-                        <span class="error-message" id="taskError"></span>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="platformInput">Platform</label>
-                        <select id="platformInput" name="platform">
-                            <option value="">Pilih Platform</option>
-                            <option value="Instagram">Instagram</option>
-                            <option value="Tiktok">TikTok</option>
-                            <option value="Youtube">YouTube</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="formatInput">Format</label>
-                        <select id="formatInput" name="format">
-                            <option value="">Pilih Format</option>
-                            <option value="Article">Article</option>
-                            <option value="Caption">Caption</option>
-                            <option value="Carousel">Carousel</option>
-                            <option value="Feeds">Feeds</option>
-                            <option value="Feeds (Grid)">Feeds (Grid)</option>
-                            <option value="Foto">Foto</option>
-                            <option value="Journal">Journal</option>
-                            <option value="Story">Story</option>
-                            <option value="Video">Video</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="assignedToInput">Assigned To <span class="required">*</span></label>
-                        <select id="assignedToInput" name="assignedTo" required>
-                            <option value="">Pilih Assignee</option>
-                            <option value="Content Writer">Content Writer</option>
-                            <option value="Design Creator">Design Creator</option>
-                            <option value="Relation And Archive">Relation And Archive</option>
-                            <option value="Room Of Documentary">Room Of Documentary</option>
-                            <option value="Social Media">Social Media</option>
-                        </select>
-                        <span class="error-message" id="assignedToError"></span>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="dueDateInput">Due Date <span class="required">*</span></label>
-                        <input type="date" id="dueDateInput" name="dueDate" required>
-                        <span class="error-message" id="dueDateError"></span>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="inProgressInput">Status <span class="required">*</span></label>
-                        <select id="inProgressInput" name="inProgress" required>
-                            <option value="Not Done">Belum Dimulai</option>
-                            <option value="On Progress">Dalam Proses</option>
-                            <option value="Ready To Upload">Siap Upload</option>
-                            <option value="Done">Selesai</option>
-                        </select>
-                        <span class="error-message" id="inProgressError"></span>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="referenceInput">Reference</label>
-                        <input type="url" id="referenceInput" name="reference" placeholder="https://example.com">
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group full-width">
-                        <label for="resultInput">Result</label>
-                        <textarea id="resultInput" name="result" placeholder="Hasil atau output..."></textarea>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group full-width">
-                        <label for="notesInput">Notes</label>
-                        <textarea id="notesInput" name="notes" placeholder="Catatan tambahan..."></textarea>
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeAddTaskForm()">Batal</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i>
-                        Simpan Task
+
+            <!-- Bulk Action Bar (Hidden by default) -->
+            <div id="bulkActionBar" class="bulk-action-bar" style="display: none;">
+                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                    <span id="selectedCount" style="font-weight: 600; color: var(--primary);">0 task dipilih</span>
+                    <button onclick="selectAllTasks()" class="btn" style="padding: 8px 16px; font-size: 0.9rem;">
+                        <i class="fas fa-check-double"></i> Pilih Semua
+                    </button>
+                    <select id="bulkStatusChange"
+                        style="padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: white;">
+                        <option value="">Ubah Status</option>
+                        <option value="Not Done">Not Done</option>
+                        <option value="On Progress">On Progress</option>
+                        <option value="Ready To Upload">Ready To Upload</option>
+                        <option value="Done">Done</option>
+                    </select>
+                    <button onclick="applyBulkStatusChange()" class="btn btn-primary"
+                        style="padding: 8px 16px; font-size: 0.9rem;">
+                        <i class="fas fa-sync"></i> Terapkan
+                    </button>
+                    <button onclick="bulkDeleteTasks()" class="btn-text btn-delete"
+                        style="padding: 8px 16px; font-size: 0.9rem;">
+                        <i class="fas fa-trash"></i> Hapus Terpilih
+                    </button>
+                    <button onclick="clearSelection()" class="btn"
+                        style="padding: 8px 16px; font-size: 0.9rem; background: rgba(255,255,255,0.1);">
+                        <i class="fas fa-times"></i> Batal
                     </button>
                 </div>
-            </form>
+            </div>
+
+            <!-- Action Bar Row 2: View Switcher & Month Navigation -->
+            <div class="view-navigation">
+                <div class="view-switcher-pill">
+                    <button class="view-btn active" onclick="app.switchView('list', this)"><i class="fas fa-list"></i>
+                        List</button>
+                    <button class="view-btn" onclick="app.switchView('monthly', this)"><i class="fas fa-th-large"></i>
+                        Month</button>
+                    <button class="view-btn" onclick="app.switchView('calendar', this)"><i class="fas fa-calendar"></i>
+                        Calendar</button>
+                </div>
+
+                <!-- Shown only for Monthly/Calendar views -->
+                <div class="month-nav" id="monthNavigation" style="display:none;">
+                    <button class="nav-btn" onclick="app.changeMonth(-1)"><i class="fas fa-chevron-left"></i></button>
+                    <span id="currentMonthDisplay" style="font-weight:700; min-width:140px; text-align:center;">Januari
+                        2024</span>
+                    <button class="nav-btn" onclick="app.changeMonth(1)"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- Content Display Area -->
+            <div id="plannerContent">
+                <div id="contentPlannerList" class="data-grid">
+                    <!-- Cards or other views rendered here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: PRESTASI MAHASISWA -->
+        <section id="prestasi-section" class="section">
+            <div class="action-bar">
+                <div class="search-box" style="flex:1">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Cari nama atau kegiatan..."
+                        onkeyup="handleSearch(this.value, 'prestasi')">
+                </div>
+            </div>
+            <div id="prestasiGrid" class="data-grid">
+                <!-- Grid Cards fetched from sheet -->
+            </div>
+        </section>
+
+        <!-- SECTION 3: MEDIA PARTNER -->
+        <section id="media-partner-section" class="section">
+            <div class="action-bar">
+                <div class="search-box" style="flex:1">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Cari instansi atau kegiatan..."
+                        onkeyup="handleSearch(this.value, 'media')">
+                </div>
+            </div>
+            <div id="mediaPartnerGrid" class="data-grid">
+                <!-- Grid Cards fetched from sheet -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Task Detail Modal -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="detailModalTitle">Detail Informasi</h3>
+                <button class="btn-icon" onclick="closeDetailModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="detailModalBody">
+                <!-- Dynamic Content -->
+            </div>
         </div>
     </div>
 
-    <!-- Toast Container -->
+    <!-- Modal Form (Content Planner Only) -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle"><i class="fas fa-plus-circle"></i> Tambah Task Baru</h3>
+                <button class="btn-icon" onclick="closeModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>Deskripsi Task *</label>
+                            <textarea name="task" required placeholder="Contoh: Pembuatan Konten Webinar..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Platform</label>
+                            <select name="platform">
+                                <option value="Instagram">Instagram</option>
+                                <option value="TikTok">TikTok</option>
+                                <option value="YouTube">YouTube</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Format</label>
+                            <select name="format">
+                                <option value="Feeds">Feeds</option>
+                                <option value="Reels">Reels/Video</option>
+                                <option value="Carousel">Carousel</option>
+                                <option value="Story">Story</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Assigned To *</label>
+                            <select name="assignedTo" required>
+                                <option value="Content Writer">Content Writer</option>
+                                <option value="Design Creator">Design Creator</option>
+                                <option value="Social Media">Social Media Manager</option>
+                                <option value="Documentation">Documentation Team</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Due Date *</label>
+                            <input type="date" name="dueDate" required>
+                        </div>
+                        <div class="form-group full">
+                            <label>Status</label>
+                            <select name="inProgress">
+                                <option value="Not Done">Not Done</option>
+                                <option value="On Progress">On Progress</option>
+                                <option value="Ready To Upload">Ready To Upload</option>
+                                <option value="Done">Done</option>
+                            </select>
+                        </div>
+                        <div class="form-group full">
+                            <label>Reference</label>
+                            <textarea name="reference" rows="2"
+                                placeholder="Link referensi atau sumber konten..."></textarea>
+                        </div>
+                        <div class="form-group full">
+                            <label>Notes</label>
+                            <textarea name="notes" rows="3" placeholder="Catatan tambahan untuk task ini..."></textarea>
+                        </div>
+                    </div>
+                    <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                        <button type="button" class="btn" style="background: rgba(255,255,255,0.1);"
+                            onclick="closeModal()">Batal</button>
+                        <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Add Tasks Modal -->
+    <div id="bulkModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h2 id="bulkModalTitle"><i class="fas fa-layer-group"></i> Tambah Banyak Task Sekaligus</h2>
+                <button onclick="closeBulkModal()"
+                    style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div
+                    style="margin-bottom: 20px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-left: 3px solid var(--primary); border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">
+                        <i class="fas fa-info-circle"></i> Isi form di bawah, lalu klik "Tambah Task" untuk menambahkan
+                        ke daftar. Anda bisa menambahkan beberapa task sebelum menyimpan semua sekaligus.
+                    </p>
+                </div>
+
+                <form id="bulkTaskForm" onsubmit="addTaskToBulkList(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nama Task *</label>
+                            <input type="text" name="task" required placeholder="Misal: Post Instagram Kegiatan...">
+                        </div>
+                        <div class="form-group">
+                            <label>Platform</label>
+                            <select name="platform">
+                                <option value="Instagram">Instagram</option>
+                                <option value="TikTok">TikTok</option>
+                                <option value="YouTube">YouTube</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Format</label>
+                            <select name="format">
+                                <option value="Feeds">Feeds</option>
+                                <option value="Reels">Reels/Video</option>
+                                <option value="Carousel">Carousel</option>
+                                <option value="Story">Story</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Assigned To *</label>
+                            <select name="assignedTo" required>
+                                <option value="Content Writer">Content Writer</option>
+                                <option value="Design Creator">Design Creator</option>
+                                <option value="Social Media">Social Media Manager</option>
+                                <option value="Documentation">Documentation Team</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Due Date *</label>
+                            <input type="date" name="dueDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select name="inProgress">
+                                <option value="Not Done">Not Done</option>
+                                <option value="On Progress">On Progress</option>
+                                <option value="Ready To Upload">Ready To Upload</option>
+                                <option value="Done">Done</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Tambah ke Daftar
+                        </button>
+                    </div>
+                </form>
+
+                <div id="bulkTaskList" style="margin-top: 24px; display: none;">
+                    <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-list"></i> Daftar Task (<span id="bulkCount">0</span>)
+                    </h3>
+                    <div id="bulkTaskItems"
+                        style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px;">
+                        <!-- Task items will be added here -->
+                    </div>
+                </div>
+
+                <div
+                    style="margin-top: 24px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+                    <button type="button" class="btn" style="background: rgba(255,255,255,0.1);"
+                        onclick="closeBulkModal()">Batal</button>
+                    <button type="button" class="btn btn-primary" onclick="saveBulkTasks()" id="saveBulkBtn" disabled>
+                        <i class="fas fa-save"></i> Simpan Semua Task
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast UI -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <p id="loadingMessage">Memuat data...</p>
-        </div>
-    </div>
+    <!-- PWA Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed'));
+            });
+        }
+    </script>
 
-    <!-- Scroll to Top Button -->
-    <button id="scrollTopBtn" class="scroll-top-btn" title="Kembali ke atas">
-        <i class="fas fa-arrow-up"></i>
-    </button>
-
-    <!-- Scripts -->
     <script src="script.js"></script>
 </body>
+
 </html>
