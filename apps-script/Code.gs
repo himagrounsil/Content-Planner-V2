@@ -14,7 +14,11 @@ const CONFIG = {
   MEDIA_PARTNER: {
     ID: '1e_FaJw2Csq67PmifCf0ajfWXZHhkSEPO8u0LnquZlqc',
     SHEET_NAME: 'Form Responses 1',
-    COLUMNS: { TIMESTAMP: 0, NAMA: 1, WA: 2, INSTANSI: 3, KEGIATAN: 4, PROPOSAL: 5, SURAT: 6, PUBLIKASI: 7 }
+    COLUMNS: { 
+      TIMESTAMP: 0, NAMA: 1, WA: 2, INSTANSI: 3, KEGIATAN: 4, 
+      PROPOSAL: 5, SURAT: 6, PUBLIKASI: 7, EMAIL: 8, 
+      JENIS: 9, POSTER: 10, CAPTION: 11, DRIVE: 12 
+    }
   }
 };
 
@@ -101,17 +105,35 @@ function getMediaPartnerData() {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   
-  const values = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
-  return values.map(row => ({
-    timestamp: formatDate(row[cfg.COLUMNS.TIMESTAMP]),
-    nama: row[cfg.COLUMNS.NAMA],
-    wa: row[cfg.COLUMNS.WA],
-    instansi: row[cfg.COLUMNS.INSTANSI],
-    kegiatan: row[cfg.COLUMNS.KEGIATAN],
-    proposal: row[cfg.COLUMNS.PROPOSAL],
-    surat: row[cfg.COLUMNS.SURAT],
-    publikasi: row[cfg.COLUMNS.PUBLIKASI]
-  }));
+  // Get existing tasks to check for duplicates
+  const taskSheet = SpreadsheetApp.openById(CONFIG.CONTENT_PLANNER.ID).getSheetByName(CONFIG.CONTENT_PLANNER.SHEET_NAME);
+  const taskLastRow = taskSheet.getLastRow();
+  const existingTasks = taskLastRow >= CONFIG.CONTENT_PLANNER.DATA_START_ROW ? 
+    taskSheet.getRange(CONFIG.CONTENT_PLANNER.DATA_START_ROW, 2, taskLastRow - CONFIG.CONTENT_PLANNER.DATA_START_ROW + 1, 1).getValues().flat() : [];
+
+  const values = sheet.getRange(2, 1, lastRow - 1, 13).getValues();
+  return values.map(row => {
+    const kegiatan = row[cfg.COLUMNS.KEGIATAN] || '';
+    const taskName = `Media Partner (${kegiatan})`;
+    const isTaskCreated = existingTasks.includes(taskName);
+
+    return {
+      timestamp: formatDate(row[cfg.COLUMNS.TIMESTAMP]),
+      nama: row[cfg.COLUMNS.NAMA],
+      wa: row[cfg.COLUMNS.WA],
+      instansi: row[cfg.COLUMNS.INSTANSI],
+      kegiatan: kegiatan,
+      proposal: row[cfg.COLUMNS.PROPOSAL],
+      surat: row[cfg.COLUMNS.SURAT],
+      publikasi: formatDate(row[cfg.COLUMNS.PUBLIKASI]),
+      email: row[cfg.COLUMNS.EMAIL],
+      jenis: row[cfg.COLUMNS.JENIS],
+      poster: row[cfg.COLUMNS.POSTER],
+      caption: row[cfg.COLUMNS.CAPTION],
+      drive: row[cfg.COLUMNS.DRIVE],
+      taskCreated: isTaskCreated ? 'TRUE' : 'FALSE'
+    };
+  });
 }
 
 function createTaskData(taskData) {
@@ -343,6 +365,66 @@ function autoCreatePrestasiTask() {
   }
 }
 
+// ========================================
+// AUTO TASK CREATION FOR MEDIA PARTNER (H-7)
+// ========================================
+
+function autoCreateMediaPartnerTask() {
+  try {
+    const mpSheet = SpreadsheetApp.openById(CONFIG.MEDIA_PARTNER.ID).getSheetByName(CONFIG.MEDIA_PARTNER.SHEET_NAME);
+    const taskSheet = SpreadsheetApp.openById(CONFIG.CONTENT_PLANNER.ID).getSheetByName(CONFIG.CONTENT_PLANNER.SHEET_NAME);
+    
+    const mpLastRow = mpSheet.getLastRow();
+    if (mpLastRow < 2) return;
+    
+    const mpData = mpSheet.getRange(2, 1, mpLastRow - 1, 13).getValues();
+    const taskLastRow = taskSheet.getLastRow();
+    const existingTasks = taskLastRow >= CONFIG.CONTENT_PLANNER.DATA_START_ROW ? 
+      taskSheet.getRange(CONFIG.CONTENT_PLANNER.DATA_START_ROW, 2, taskLastRow - CONFIG.CONTENT_PLANNER.DATA_START_ROW + 1, 1).getValues().flat() : [];
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // H-7 Threshold
+    const h7Threshold = new Date(today);
+    h7Threshold.setDate(today.getDate() + 7);
+
+    mpData.forEach(row => {
+      const kegiatan = row[CONFIG.MEDIA_PARTNER.COLUMNS.KEGIATAN];
+      if (!kegiatan) return;
+
+      const publikasiDate = new Date(row[CONFIG.MEDIA_PARTNER.COLUMNS.PUBLIKASI]);
+      if (isNaN(publikasiDate.getTime())) return;
+      publikasiDate.setHours(0, 0, 0, 0);
+
+      const taskName = `Media Partner (${kegiatan})`;
+      
+      // LOGIC: IF publikasi date is <= today + 7 AND task NOT exists
+      if (publikasiDate <= h7Threshold && !existingTasks.includes(taskName)) {
+        Logger.log(`Creating auto task for: ${taskName}`);
+        
+        const driveAset = row[CONFIG.MEDIA_PARTNER.COLUMNS.DRIVE] || '-';
+        const taskData = {
+          task: taskName,
+          platform: 'Instagram',
+          format: 'Feeds',
+          assignedTo: 'Design Creator',
+          dueDate: formatDate(publikasiDate),
+          inProgress: 'Not Done',
+          notes: `Kegiatan: ${kegiatan}\nInstansi: ${row[CONFIG.MEDIA_PARTNER.COLUMNS.INSTANSI]}\nLink Drive Aset: ${driveAset}`
+        };
+        
+        createTaskData(taskData);
+        // Add to existingTasks to prevent duplicates in the same run
+        existingTasks.push(taskName);
+      }
+    });
+
+  } catch (error) {
+    Logger.log(`❌ ERROR MP Automation: ${error.message}`);
+  }
+}
+
 // SETUP TRIGGERS
 function setupMonthlyTriggers() {
   try {
@@ -371,6 +453,15 @@ function setupMonthlyTriggers() {
       .create();
     
     Logger.log('✅ Trigger created for 30th at 9 PM');
+
+    // Create daily trigger for Media Partner H-7 automation
+    ScriptApp.newTrigger('autoCreateMediaPartnerTask')
+      .timeBased()
+      .everyDays(1)
+      .atHour(1) // Run at 1 AM
+      .create();
+
+    Logger.log('✅ Daily Trigger created for Media Partner H-7 automation');
     Logger.log('✅ All triggers setup complete!');
     
   } catch (error) {

@@ -439,9 +439,10 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('Service Worker registered'))
-                    .catch(err => console.log('Service Worker registration failed'));
+                const swPath = 'service-worker.js';
+                navigator.serviceWorker.register(swPath, { scope: './' })
+                    .then(reg => console.log('Service Worker V2 registered with scope:', reg.scope))
+                    .catch(err => console.log('Service Worker V2 registration failed:', err));
             });
         }
     </script>

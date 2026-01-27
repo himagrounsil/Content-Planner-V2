@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbwpWA1XYxZpRauGGI-t_qm1Onq7cC0BGh8j7qglV1MyQFu6_ULxavMjorQ1ooZM0xLV/exec',
+    API_URL: 'https://script.google.com/macros/s/AKfycbyCvcXCAQt_D8hHX0ktmcwvl56SU0hftBiemHIwjE3f6-grk27IRP6TuawPyE4ZIYPY/exec',
 };
 
 class AppManager {
@@ -281,8 +281,10 @@ class AppManager {
         grid.innerHTML = '';
         const items = mediaToRender || this.data.media;
         items.forEach(item => {
-            const hasProposal = item.proposal && item.proposal.length > 5;
-            const hasSurat = item.surat && item.surat.length > 5;
+            const hasProposal = (item.proposal && item.proposal.length > 5) || item.proposal === 'Ya';
+            const hasSurat = (item.surat && item.surat.length > 5) || item.surat === 'Ya';
+            const hasPoster = item.poster === 'Ya';
+            const hasCaption = item.caption === 'Ya';
             const taskCreated = item.taskCreated === 'TRUE';
 
             const card = document.createElement('div');
@@ -293,16 +295,22 @@ class AppManager {
                     ${taskCreated ? '<span class="badge-created">✓ Task Dibuat</span>' : ''}
                 </h3>
                 <div class="grid-info-row"><i class="fas fa-building"></i> ${item.instansi}</div>
-                <div class="grid-info-row">
-                    <i class="fas fa-check-circle" style="color: ${hasProposal ? 'var(--primary)' : 'var(--text-muted)'}"></i> Proposal
-                    <i class="fas fa-check-circle" style="color: ${hasSurat ? 'var(--primary)' : 'var(--text-muted)'}" style="margin-left:10px"></i> Surat
+                <div class="grid-info-row" style="margin-top: 8px; flex-wrap: wrap; gap: 12px;">
+                    <span><i class="fas fa-check-circle" style="color: ${hasProposal ? 'var(--primary)' : 'var(--text-muted)'}"></i> Prop</span>
+                    <span><i class="fas fa-check-circle" style="color: ${hasSurat ? 'var(--primary)' : 'var(--text-muted)'}"></i> Surat</span>
+                    <span><i class="fas fa-check-circle" style="color: ${hasPoster ? 'var(--primary)' : 'var(--text-muted)'}"></i> Poster</span>
+                    <span><i class="fas fa-check-circle" style="color: ${hasCaption ? 'var(--primary)' : 'var(--text-muted)'}"></i> Cap</span>
                 </div>
-                <div style="margin-top:auto; display:flex; gap:10px;">
+                <div style="margin-top:auto; display:flex; gap:10px; padding-top: 12px;">
                     <button class="btn btn-primary" style="font-size:0.75rem; flex:1" 
                             onclick="event.stopPropagation(); app.automateTask(${JSON.stringify(item).replace(/"/g, '&quot;')})"
                             ${taskCreated ? 'disabled' : ''}>
                         <i class="fas fa-magic"></i> ${taskCreated ? 'Sudah Ditambahkan' : 'Auto Planner'}
                     </button>
+                    <a href="https://wa.me/${item.wa?.replace(/\D/g, '')}" target="_blank" class="btn" 
+                       style="padding: 0 12px; background: #25D366; color: white;" onclick="event.stopPropagation()">
+                        <i class="fab fa-whatsapp"></i>
+                    </a>
                 </div>
             `;
             card.onclick = () => this.showMediaDetail(item);
@@ -430,9 +438,50 @@ class AppManager {
     }
 
     showMediaDetail(item) {
-        const body = Object.entries(item).map(([k, v]) => `
-            <div class="detail-row"><span class="detail-label">${k.toUpperCase()}</span><div class="detail-content">${v || '-'}</div></div>
-        `).join('');
+        const labels = {
+            timestamp: 'Timestamp',
+            nama: 'Nama CP',
+            wa: 'WhatsApp',
+            instansi: 'Nama Instansi',
+            kegiatan: 'Nama Kegiatan',
+            proposal: 'Proposal',
+            surat: 'Surat Pengajuan',
+            publikasi: 'Rencana Publikasi',
+            email: 'Email',
+            jenis: 'Jenis Kegiatan',
+            poster: 'Poster Tersedia',
+            caption: 'Caption Tersedia',
+            drive: 'Link Drive Aset'
+        };
+
+        const body = Object.entries(labels).map(([key, label]) => {
+            let val = item[key] || '-';
+
+            // Format indicators
+            if (['proposal', 'surat', 'poster', 'caption'].includes(key)) {
+                const isOk = val.length > 5 || val === 'Ya';
+                val = `<i class="fas fa-check-circle" style="color: ${isOk ? 'var(--primary)' : 'var(--text-muted)'}"></i> ${isOk ? 'Tersedia' : 'Tidak Ada'}`;
+            }
+
+            // Add WhatsApp Button next to number
+            if (key === 'wa' && item.wa) {
+                const cleanWa = item.wa.replace(/\D/g, '');
+                val = `${item.wa} <a href="https://wa.me/${cleanWa}" target="_blank" class="btn" style="padding: 4px 8px; font-size: 0.7rem; background: #25D366; color: white; display: inline-flex; margin-left: 8px;"><i class="fab fa-whatsapp"></i> Hubungi</a>`;
+            }
+
+            // Linkify Drive
+            if (key === 'drive' && item.drive && item.drive.startsWith('http')) {
+                val = `<a href="${item.drive}" target="_blank" style="color: var(--primary); text-decoration: underline; word-break: break-all;">${item.drive}</a>`;
+            }
+
+            return `
+                <div class="detail-row">
+                    <span class="detail-label">${label}</span>
+                    <div class="detail-content">${val}</div>
+                </div>
+            `;
+        }).join('');
+
         this.showModalDetail('Detail Media Partner', body);
     }
 

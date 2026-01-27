@@ -1,13 +1,14 @@
-const CACHE_NAME = 'himagro-cms-v1';
+const CACHE_NAME = 'himagro-cms-v2-cache';
 const urlsToCache = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/script.js',
-    '/Logo/LOGO-UNSIL.png',
-    '/Logo/Logo-HIMAGRO.png',
-    '/Logo/Logo-CitaSaswahita Tanpa BG.png',
-    '/Logo/Logo Kominfo.png',
+    './',
+    'index.html',
+    'styles.css',
+    'script.js',
+    'Logo/Unsil.png',
+    'Logo/Himagro.png',
+    'Logo/Kabinet.png',
+    'Logo/BluSpeed.png',
+    'Logo/Berdampak.png',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
 ];
