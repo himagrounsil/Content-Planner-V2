@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#10b981">
     <meta name="description" content="Dashboard monitoring Program Kerja dan Konten Media Sosial HIMAGRO">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CMS HIMAGRO">
@@ -27,11 +28,49 @@
     <!-- Global Loading Overlay / Splash Screen -->
     <div id="loadingStateContent" class="loading-overlay">
         <div style="display: flex; flex-direction: column; align-items: center; gap: 24px;">
-            <div class="spinner"></div>
-            <div
-                style="text-align: center; animation: fadeIn 1s ease-in-out; display: flex; flex-direction: column; align-items: center; gap: 16px;">
-                <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0;">Content Management System</h2>
-                <p style="font-size: 1.1rem; color: var(--primary); font-weight: 600;">HIMAGRO</p>
+            <div id="loadingLogoContainer" style="display: none;">
+                <!-- Logo Kominfo for Initial Load -->
+                <img src="Logo/Logo Kominfo.png" alt="Kominfo" style="height: 80px; animation: pulse 2s infinite;">
+            </div>
+            <div id="loadingSpinner" class="spinner"></div>
+            <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                <h2 id="loadingTitle" style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0; color: white;">
+                    Memproses...</h2>
+                <p id="loadingSubtitle" style="font-size: 0.9rem; color: var(--primary); font-weight: 600; margin: 0;">
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal" style="display: none; background: var(--background);">
+        <div class="modal-content"
+            style="max-width: 500px; text-align: center; padding: 40px; background: #044434; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="margin-bottom: 30px;">
+                <div
+                    style="background: white; border-radius: 50px; padding: 12px 25px; display: inline-flex; justify-content: center; align-items: center; gap: 12px; margin-bottom: 25px; white-space: nowrap; flex-wrap: nowrap;">
+                    <img src="Logo/Unsil.png" alt="UNSIL" style="height: 38px;">
+                    <img src="Logo/Himagro.png" alt="HIMAGRO" style="height: 38px;">
+                    <img src="Logo/Kabinet.png" alt="Kabinet" style="height: 38px;">
+                    <img src="Logo/BluSpeed.png" alt="BluSpeed" style="height: 38px;">
+                    <img src="Logo/Berdampak.png" alt="Berdampak" style="height: 38px;">
+                </div>
+                <h2 style="font-size: 2rem; margin-bottom: 15px; color: white; font-weight: 800;">Selamat Datang!</h2>
+                <p style="color: rgba(255,255,255,0.8); font-size: 0.95rem; line-height: 1.6;">Silakan masukkan nama
+                    Anda untuk mengakses dashboard CMS HIMAGRO.</p>
+            </div>
+            <form id="loginForm" onsubmit="event.preventDefault(); window.handleLogin();">
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <input type="text" id="loginUserName" required placeholder="Nama Lengkap Anda..."
+                        style="width: 100%; padding: 16px; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; font-size: 1.1rem; text-align: center;">
+                </div>
+                <button type="submit" class="btn btn-primary"
+                    style="width: 100%; padding: 16px; border-radius: 12px; font-weight: 800; font-size: 1.2rem; display: flex; justify-content: center; align-items: center;">
+                    LOGIN
+                </button>
+            </form>
+            <div style="margin-top: 30px; font-size: 0.85rem; color: rgba(255,255,255,0.5);">
+                Identitas Anda diperlukan untuk pencatatan riwayat perubahan (Log History).
             </div>
         </div>
     </div>
@@ -74,6 +113,10 @@
             </ul>
 
             <div class="sidebar-footer">
+                <button class="action-btn" onclick="openGuide()">
+                    <i class="fas fa-book"></i>
+                    <span>Panduan Penggunaan</span>
+                </button>
                 <button class="action-btn" onclick="app.loadAllData()">
                     <i class="fas fa-sync-alt"></i>
                     <span>Refresh Data</span>
@@ -81,6 +124,10 @@
                 <button class="action-btn" onclick="app.clearCache()">
                     <i class="fas fa-eraser"></i>
                     <span>Clear Cache</span>
+                </button>
+                <button class="action-btn" onclick="app.logout()" style="color: #ef4444;">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
                 </button>
             </div>
         </nav>
@@ -428,6 +475,109 @@
                         <i class="fas fa-save"></i> Simpan Semua Task
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guide Modal -->
+    <div id="guideModal" class="modal">
+        <div class="modal-content" style="max-width: 850px; height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2><i class="fas fa-book-open"></i> Panduan CMS HIMAGRO</h2>
+                <button class="btn-icon" onclick="closeGuide()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" style="overflow-y: auto; padding-right: 15px;">
+                <div class="guide-section">
+                    <h3><i class="fas fa-layer-group"></i> Modul Utama</h3>
+                    <div class="guide-grid">
+                        <div class="guide-card">
+                            <h4>Content Planner</h4>
+                            <p>Pusat kontrol konten. Anda bisa menambahkan task satuan (<b>Tambah Task</b>) atau banyak
+                                sekaligus (<b>Tambah Banyak</b>).</p>
+                        </div>
+                        <div class="guide-card">
+                            <h4>Prestasi Mahasiswa</h4>
+                            <p>Data otomatis dari Google Form. Gunakan filter <b>Tingkat</b> untuk memantau pencapaian.
+                            </p>
+                        </div>
+                        <div class="guide-card">
+                            <h4>Media Partner</h4>
+                            <p>Manajemen kerjasama. Cek status administrasi (Poster, Caption, Surat) dan hubungi CP via
+                                WhatsApp.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="guide-section" style="margin-top: 24px;">
+                    <h3><i class="fas fa-cogs"></i> Fitur Menengah</h3>
+                    <ul>
+                        <li><b>Bulk Selection:</b> Centang checkbox pada kartu task untuk memunculkan bar aksi masal
+                            (Ubah status atau hapus banyak).</li>
+                        <li><b>Mode View:</b> Gunakan List untuk daftar, Month untuk ringkasan bulanan, dan Calendar
+                            untuk visualisasi jadwal.</li>
+                        <li><b>Auto Planner:</b> Klik tombol "Auto Planner" di Media Partner untuk memindahkan data ke
+                            jadwal konten secara instan.</li>
+                    </ul>
+                </div>
+
+                <div class="guide-section" style="margin-top: 24px;">
+                    <h3><i class="fas fa-database"></i> Aturan Database (Spreadsheet)</h3>
+                    <div class="alert alert-info">Sistem menggunakan <b>Header Mapping</b>. Jangan mengubah nama kolom
+                        kunci berikut:</div>
+                    <table class="guide-table">
+                        <thead>
+                            <tr>
+                                <th>Sheet</th>
+                                <th>Elemen Kunci (Headers)</th>
+                                <th>Aturan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Content Planner</td>
+                                <td>No, Task, Platform, Format, Due Date, Status</td>
+                                <td>Data utama dimulai dari <b>Baris 17</b>. Jangan hapus baris header.</td>
+                            </tr>
+                            <tr>
+                                <td>Dropdown List</td>
+                                <td>UniqueSubDiv, UniqueFormat</td>
+                                <td>Gunakan sheet ini untuk menambah anggota tim atau format baru.</td>
+                            </tr>
+                            <tr>
+                                <td>Prestasi / Media</td>
+                                <td>CMS_Status</td>
+                                <td><b>DILARANG MENGUBAH/MENGHAPUS</b> kolom ini. Digunakan sistem untuk tanda
+                                    PROCESSED.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                        <a href="https://docs.google.com/spreadsheets/d/1HfFmOx8iGWvA_XEWvz8RSBMxxbOZKCA459fOkD1JT_E/edit?usp=sharing"
+                            target="_blank" class="btn btn-primary" style="font-size: 0.8rem; padding: 8px 16px;">
+                            <i class="fas fa-external-link-alt"></i> Edit Database Content Planner
+                        </a>
+                    </div>
+                </div>
+
+                <div class="guide-section" style="margin-top: 24px;">
+                    <h3><i class="fas fa-magic"></i> Fitur Otomatisasi (Tanpa Campur Tangan)</h3>
+                    <p>Sistem backend akan bekerja otomatis pada jadwal berikut:</p>
+                    <ul>
+                        <li><b>Prestasi Batch 1:</b> Setiap tanggal 15 pukul 21:00. Mengangkut data baru menjadi task
+                            konten.</li>
+                        <li><b>Prestasi Batch 2:</b> Setiap tanggal 1 pukul 01:00 Pagi. Mengangkut sisa data bulan
+                            sebelumnya.</li>
+                        <li><b>Media Partner H-7:</b> Berjalan setiap hari. Membuat task otomatis jika publikasi tinggal
+                            7 hari lagi.</li>
+                    </ul>
+                </div>
+
+                <div style="margin-top: 32px; text-align: center; opacity: 0.7; font-size: 0.85rem;">
+                    Versi 3.0 Stable | Didesain untuk penggunaan jangka panjang HIMAGRO.
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 16px; border-top: 1px solid var(--border); text-align: right;">
+                <button class="btn btn-primary" onclick="closeGuide()">Saya Mengerti</button>
             </div>
         </div>
     </div>

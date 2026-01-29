@@ -1,4 +1,4 @@
-const CACHE_NAME = 'himagro-cms-v2-cache';
+const CACHE_NAME = 'himagro-cms-v3-cache';
 const urlsToCache = [
     './',
     'index.html',
@@ -9,6 +9,7 @@ const urlsToCache = [
     'Logo/Kabinet.png',
     'Logo/BluSpeed.png',
     'Logo/Berdampak.png',
+    'Logo/Logo Kominfo.png',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'
 ];

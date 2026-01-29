@@ -1,21 +1,54 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbyCvcXCAQt_D8hHX0ktmcwvl56SU0hftBiemHIwjE3f6-grk27IRP6TuawPyE4ZIYPY/exec',
+    API_URL: 'https://script.google.com/macros/s/AKfycbyLlV650t_McU3YpZcsxN4IdZ9AWki753U2sOsMKwbBuEYuagBDHaq5uki0cJfhy8d4/exec',
 };
 
 class AppManager {
     constructor() {
         this.currentSection = 'content-planner';
         this.currentView = 'list';
-        this.currentDate = new Date(); // For month navigation
-        this.data = { tasks: [], prestasi: [], media: [] };
+        this.currentDate = new Date();
+        this.data = { tasks: [], prestasi: [], media: [], dropdowns: { assignedTo: [], format: [] } };
         this.filteredData = { tasks: [], prestasi: [], media: [] };
+        this.userName = localStorage.getItem('himagro_user') || null;
         this.init();
     }
 
     async init() {
+        if (!this.userName) {
+            this.showLoginModal();
+            return;
+        }
+        this.proceedWithInit();
+    }
+
+    async proceedWithInit() {
+        // First visit check for Guide
+        const hasSeenGuide = localStorage.getItem('himagro_seen_guide');
+        if (!hasSeenGuide) {
+            setTimeout(() => window.openGuide(), 1500);
+            localStorage.setItem('himagro_seen_guide', 'true');
+        }
+
         this.setupEventListeners();
-        await this.loadAllData();
+        await this.loadAllData(true); // Pass true for initial load
         this.switchSection('content-planner', document.querySelector('.nav-item.active'));
+    }
+
+    showLoginModal() {
+        document.getElementById('loginModal').style.display = 'flex';
+        this.hideLoading();
+    }
+
+    handleLogin() {
+        const nameInput = document.getElementById('loginUserName');
+        const name = nameInput.value.trim();
+        if (name) {
+            this.userName = name;
+            localStorage.setItem('himagro_user', this.userName);
+            document.getElementById('loginModal').style.display = 'none';
+            this.showLoading();
+            this.proceedWithInit();
+        }
     }
 
     setupEventListeners() {
@@ -37,30 +70,89 @@ class AppManager {
         }
     }
 
-    async loadAllData() {
-        this.showLoading();
+    async loadAllData(isInitial = false) {
+        this.showLoading(isInitial ? 'Sedang Menyiapkan System...' : 'Merefresh Data...', isInitial);
         try {
-            const actions = ['getTasks', 'getPrestasi', 'getMediaPartner'];
-            const promises = actions.map(action => fetch(`${CONFIG.API_URL}?action=${action}`).then(r => r.json()));
-            const [tasks, prestasi, media] = await Promise.all(promises);
+            // SINGLE CALL to speed up loading
+            const response = await fetch(`${CONFIG.API_URL}?action=getAllData`);
+            const allData = await response.json();
 
-            this.data = { tasks, prestasi, media };
+            if (allData.error) throw new Error(allData.error);
+
+            this.data = allData;
+            this.populateDropdowns();
             this.applyFilters();
-            this.showToast('Data berhasil diperbarui', 'success');
+            if (!isInitial) this.showToast('Data berhasil diperbarui', 'success');
         } catch (error) {
-            this.showToast('Gagal memuat data!', 'error');
+            console.error('Initial load failed:', error);
+            this.showToast('Gagal memuat data! Periksa koneksi internet.', 'error');
         } finally {
             this.hideLoading();
         }
     }
 
+    populateDropdowns() {
+        const { assignedTo, format } = this.data.dropdowns;
+
+        // Update Filters
+        const filterAssignee = document.getElementById('filterAssignee');
+        const filterFormat = document.getElementById('filterFormat');
+
+        if (filterAssignee) {
+            filterAssignee.innerHTML = '<option value="">Assigned To</option>' +
+                assignedTo.map(a => `<option value="${a}">${a}</option>`).join('');
+        }
+        if (filterFormat) {
+            filterFormat.innerHTML = '<option value="">Format</option>' +
+                format.map(f => `<option value="${f}">${f}</option>`).join('');
+        }
+
+        // Update Modal Forms (Normal & Bulk)
+        const modalAssignees = document.querySelectorAll('select[name="assignedTo"]');
+        const modalFormats = document.querySelectorAll('select[name="format"]');
+
+        modalAssignees.forEach(select => {
+            select.innerHTML = assignedTo.map(a => `<option value="${a}">${a}</option>`).join('');
+        });
+        modalFormats.forEach(select => {
+            select.innerHTML = format.map(f => `<option value="${f}">${f}</option>`).join('');
+        });
+    }
+
+    async logActivity(action, targetId, details) {
+        try {
+            const logData = {
+                user: this.userName,
+                action: action,
+                targetId: targetId,
+                details: details
+            };
+            await fetch(`${CONFIG.API_URL}?action=logActivity&data=${encodeURIComponent(JSON.stringify(logData))}`);
+        } catch (e) {
+            console.error('Log failed', e);
+        }
+    }
+
     async clearCache() {
-        this.showLoading();
+        this.showLoading('Membersihkan Cache...');
         this.data = { tasks: [], prestasi: [], media: [] };
         this.filteredData = { tasks: [], prestasi: [], media: [] };
         // If there were any localStorage keys, clear them here
         await this.loadAllData();
         this.showToast('Cache dibersihkan', 'success');
+    }
+
+    logout() {
+        this.showConfirmNotification(
+            'Apakah Anda yakin ingin logout? Nama Anda akan dihapus dari sistem ini.',
+            () => {
+                localStorage.removeItem('himagro_user');
+                this.showToast('Logout berhasil, mengalihkan...', 'success');
+                setTimeout(() => location.reload(), 1000);
+            },
+            'Ya, Logout',
+            'Batal'
+        );
     }
 
     async switchSection(sectionId, element) {
@@ -335,11 +427,14 @@ class AppManager {
         const taskData = Object.fromEntries(formData.entries());
         const taskId = e.target.dataset.taskId;
 
-        this.showLoading();
-        this.showToast('Sedang menyimpan...', 'info');
+        this.showLoading(taskId ? 'Memperbarui Task...' : 'Menambahkan Task Baru...');
         try {
             const action = taskId ? `updateTask&id=${taskId}` : 'createTask';
             await fetch(`${CONFIG.API_URL}?action=${action}&data=${encodeURIComponent(JSON.stringify(taskData))}`);
+
+            // Log the activity
+            await this.logActivity(taskId ? 'UPDATE' : 'CREATE', taskId || 'NEW', `Task: ${taskData.task}`);
+
             this.showToast('Berhasil disimpan!', 'success');
             this.closeModal();
             await this.loadAllData();
@@ -370,10 +465,10 @@ class AppManager {
     async deleteTask(id) {
         // Show custom confirmation notification
         this.showConfirmNotification('Apakah Anda yakin ingin menghapus task ini?', async () => {
-            this.showLoading();
-            this.showToast('Menghapus...', 'info');
+            this.showLoading('Menghapus Task...');
             try {
                 await fetch(`${CONFIG.API_URL}?action=deleteTask&id=${id}`);
+                await this.logActivity('DELETE', id, 'Deleted content planner task');
                 this.showToast('Berhasil dihapus', 'success');
                 await this.loadAllData();
             } catch (error) {
@@ -388,6 +483,7 @@ class AppManager {
         this.showToast('Mengupdate status...', 'info');
         try {
             await fetch(`${CONFIG.API_URL}?action=updateTask&id=${no}&data=${encodeURIComponent(JSON.stringify({ inProgress: status }))}`);
+            await this.logActivity('STATUS_CHANGE', no, `Quick status update to: ${status}`);
             this.showToast('Status diperbarui!', 'success');
             const task = this.data.tasks.find(t => t.no == no);
             if (task) task.inProgress = status;
@@ -410,7 +506,12 @@ class AppManager {
 
         this.showToast('Menambah ke Content Planner...', 'info');
         try {
-            await fetch(`${CONFIG.API_URL}?action=createTask&data=${encodeURIComponent(JSON.stringify(taskData))}`);
+            const data = {
+                rowIdx: item.rowIdx,
+                taskData: taskData
+            };
+            await fetch(`${CONFIG.API_URL}?action=processMedia&data=${encodeURIComponent(JSON.stringify(data))}`);
+            await this.logActivity('AUTO_PLANNER', 'NEW', `Media Partner: ${item.kegiatan}`);
             this.showToast('Berhasil ditambahkan ke Planner!', 'success');
             await this.loadAllData();
         } catch (e) {
@@ -502,13 +603,39 @@ class AppManager {
         delete document.getElementById('taskForm').dataset.taskId;
     }
 
-    showLoading() { document.getElementById('loadingStateContent').style.display = 'flex'; }
-    hideLoading() { document.getElementById('loadingStateContent').style.display = 'none'; }
+    showLoading(message = 'Memproses...', isInitial = false) {
+        const overlay = document.getElementById('loadingStateContent');
+        const logo = document.getElementById('loadingLogoContainer');
+        const spinner = document.getElementById('loadingSpinner');
+        const title = document.getElementById('loadingTitle');
+        const subtitle = document.getElementById('loadingSubtitle');
+
+        if (overlay) overlay.style.display = 'flex';
+        if (title) title.textContent = message;
+        if (subtitle) subtitle.textContent = isInitial ? 'Mohon Tunggu Sebentar' : 'Sistem sedang bekerja';
+
+        if (isInitial) {
+            if (logo) logo.style.display = 'block';
+            if (spinner) spinner.style.display = 'none';
+        } else {
+            if (logo) logo.style.display = 'none';
+            if (spinner) spinner.style.display = 'block';
+        }
+    }
+
+    hideLoading() {
+        const overlay = document.getElementById('loadingStateContent');
+        if (overlay) overlay.style.display = 'none';
+    }
 
     showToast(m, t) {
         const cont = document.getElementById('toastContainer');
-        const d = document.createElement('div'); d.className = `toast ${t}`; d.textContent = m;
-        cont.appendChild(d); setTimeout(() => d.remove(), 4000);
+        if (!cont) return; // Fix appendChild error
+        const d = document.createElement('div');
+        d.className = `toast ${t}`;
+        d.textContent = m;
+        cont.appendChild(d);
+        setTimeout(() => d.remove(), 4000);
     }
 }
 
@@ -525,15 +652,15 @@ window.closeModal = () => app.closeModal();
 window.handleSearch = (val) => app.handleSearch(val);
 
 // Add showConfirmNotification method to AppManager
-AppManager.prototype.showConfirmNotification = function (message, onConfirm) {
+AppManager.prototype.showConfirmNotification = function (message, onConfirm, okText = 'Ya, Hapus', cancelText = 'Batal') {
     const notification = document.createElement('div');
     notification.className = 'confirm-notification';
     notification.innerHTML = `
         <div class="confirm-content">
             <p>${message}</p>
             <div class="confirm-buttons">
-                <button class="btn-confirm-cancel">Batal</button>
-                <button class="btn-confirm-ok">Ya, Hapus</button>
+                <button class="btn-confirm-cancel">${cancelText}</button>
+                <button class="btn-confirm-ok">${okText}</button>
             </div>
         </div>
     `;
@@ -634,8 +761,7 @@ window.saveBulkTasks = async () => {
         return;
     }
 
-    app.showLoading();
-    app.showToast(`Menyimpan ${bulkTasksArray.length} task...`, 'info');
+    app.showLoading(`Menyimpan ${bulkTasksArray.length} Task...`);
 
     try {
         // Save all tasks
@@ -644,6 +770,8 @@ window.saveBulkTasks = async () => {
         );
 
         await Promise.all(promises);
+
+        await app.logActivity('BULK_CREATE', 'MULTIPLE', `Created ${bulkTasksArray.length} tasks via bulk add`);
 
         app.showToast(`Berhasil menyimpan ${bulkTasksArray.length} task!`, 'success');
         closeBulkModal();
@@ -702,14 +830,14 @@ window.applyBulkStatusChange = async () => {
         return;
     }
 
-    app.showLoading();
-    app.showToast(`Mengubah status ${selectedTasks.size} task...`, 'info');
+    app.showLoading(`Memperbarui ${selectedTasks.size} Status...`);
 
     try {
         const promises = Array.from(selectedTasks).map(taskId =>
             fetch(`${CONFIG.API_URL}?action=updateTask&id=${taskId}&data=${encodeURIComponent(JSON.stringify({ inProgress: status }))}`)
         );
         await Promise.all(promises);
+        await app.logActivity('BULK_STATUS_CHANGE', 'MULTIPLE', `Changed status of ${selectedTasks.size} tasks to ${status}`);
         app.showToast(`${selectedTasks.size} task berhasil diupdate`, 'success');
         clearSelection();
         await app.loadAllData();
@@ -732,6 +860,7 @@ window.bulkDeleteTasks = () => {
                     fetch(`${CONFIG.API_URL}?action=deleteTask&id=${taskId}`)
                 );
                 await Promise.all(promises);
+                await app.logActivity('BULK_DELETE', 'MULTIPLE', `Deleted ${selectedTasks.size} tasks via bulk selection`);
                 app.showToast(`${selectedTasks.size} task berhasil dihapus`, 'success');
                 clearSelection();
                 await app.loadAllData();
@@ -767,3 +896,14 @@ window.formatRelativeTime = (timestamp) => {
 window.closeDetailModal = () => document.getElementById('detailModal').style.display = 'none';
 window.switchView = (view, el) => app.switchView(view, el);
 window.applyFilters = () => app.applyFilters();
+
+// Guide Handlers
+window.openGuide = () => {
+    document.getElementById('guideModal').style.display = 'flex';
+};
+
+window.closeGuide = () => {
+    document.getElementById('guideModal').style.display = 'none';
+};
+
+window.handleLogin = () => app.handleLogin();
