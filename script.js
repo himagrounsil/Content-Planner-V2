@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbyLlV650t_McU3YpZcsxN4IdZ9AWki753U2sOsMKwbBuEYuagBDHaq5uki0cJfhy8d4/exec',
+    API_URL: 'https://script.google.com/macros/s/AKfycbz_aR8K15x7glFS2tgthNrsBScUw_1TqHPveG_AQraOAuAEsp21eDVGg-_KjiOvTRxf/exec',
 };
 
 class AppManager {

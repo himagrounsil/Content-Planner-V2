@@ -140,19 +140,23 @@ function getTasksData(openedSs) {
   if (lastRow < cfg.DATA_START_ROW) return [];
   
   const values = sheet.getRange(cfg.DATA_START_ROW, 1, lastRow - cfg.DATA_START_ROW + 1, 11).getValues();
-  return values.map((row, index) => ({
-    no: row[cfg.COLUMNS.NO] || cfg.DATA_START_ROW + index,
-    task: row[cfg.COLUMNS.TASK] || '',
-    platform: row[cfg.COLUMNS.PLATFORM] || '',
-    format: row[cfg.COLUMNS.FORMAT] || '',
-    assignedTo: row[cfg.COLUMNS.ASSIGNED_TO] || '',
-    dueDate: row[cfg.COLUMNS.DUE_DATE] ? formatDate(row[cfg.COLUMNS.DUE_DATE]) : '',
-    dateLeft: row[cfg.COLUMNS.DATE_LEFT] || 0,
-    inProgress: row[cfg.COLUMNS.IN_PROGRESS] || '',
-    reference: row[cfg.COLUMNS.REFERENCE] || '',
-    result: row[cfg.COLUMNS.RESULT] || '',
-    notes: row[cfg.COLUMNS.NOTES] || ''
-  }));
+  
+  // FILTER: Hanya ambil baris yang kolom TASK-nya tidak kosong
+  return values
+    .filter(row => row[cfg.COLUMNS.TASK] && row[cfg.COLUMNS.TASK].toString().trim() !== "")
+    .map((row, index) => ({
+      no: row[cfg.COLUMNS.NO] || "",
+      task: row[cfg.COLUMNS.TASK] || '',
+      platform: row[cfg.COLUMNS.PLATFORM] || '',
+      format: row[cfg.COLUMNS.FORMAT] || '',
+      assignedTo: row[cfg.COLUMNS.ASSIGNED_TO] || '',
+      dueDate: row[cfg.COLUMNS.DUE_DATE] ? formatDate(row[cfg.COLUMNS.DUE_DATE]) : '',
+      dateLeft: row[cfg.COLUMNS.DATE_LEFT] || 0,
+      inProgress: row[cfg.COLUMNS.IN_PROGRESS] || '',
+      reference: row[cfg.COLUMNS.REFERENCE] || '',
+      result: row[cfg.COLUMNS.RESULT] || '',
+      notes: row[cfg.COLUMNS.NOTES] || ''
+    }));
 }
 
 function createTaskData(taskData) {
@@ -225,8 +229,9 @@ function deleteTaskData(id) {
   const sheet = SpreadsheetApp.openById(cfg.ID).getSheetByName(cfg.SHEET_NAME);
   const lastRow = sheet.getLastRow();
   for (let row = cfg.DATA_START_ROW; row <= lastRow; row++) {
+    // Cari baris berdasarkan ID di kolom pertama (No)
     if (sheet.getRange(row, 1).getValue() == id) {
-      sheet.getRange(row, 1, 1, 11).clearContent();
+      sheet.deleteRow(row); // Hapus baris secara fisik
       return { success: true };
     }
   }
