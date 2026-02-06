@@ -429,8 +429,11 @@ class AppManager {
 
         this.showLoading(taskId ? 'Memperbarui Task...' : 'Menambahkan Task Baru...');
         try {
-            const action = taskId ? `updateTask&id=${taskId}` : 'createTask';
-            await fetch(`${CONFIG.API_URL}?action=${action}&data=${encodeURIComponent(JSON.stringify(taskData))}`);
+            const actionUrl = taskId ? `updateTask&id=${taskId}` : 'createTask';
+            // Add timestamp to bypass any caching
+            const fullUrl = `${CONFIG.API_URL}?action=${actionUrl}&data=${encodeURIComponent(JSON.stringify(taskData))}&t=${Date.now()}`;
+
+            await fetch(fullUrl, { mode: 'cors', redirect: 'follow' });
 
             // Log the activity
             await this.logActivity(taskId ? 'UPDATE' : 'CREATE', taskId || 'NEW', `Task: ${taskData.task}`);
