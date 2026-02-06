@@ -585,14 +585,15 @@
     <!-- Toast UI -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- PWA Service Worker Registration -->
+    <!-- Service Worker DISABLED to fix CORS issues with Google Apps Script -->
     <script>
+        // Unregister ALL existing Service Workers
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                const swPath = 'service-worker.js';
-                navigator.serviceWorker.register(swPath, { scope: './' })
-                    .then(reg => console.log('Service Worker V2 registered with scope:', reg.scope))
-                    .catch(err => console.log('Service Worker V2 registration failed:', err));
+            navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                for (let registration of registrations) {
+                    registration.unregister();
+                    console.log('Service Worker unregistered:', registration);
+                }
             });
         }
     </script>
