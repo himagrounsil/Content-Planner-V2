@@ -1,4 +1,4 @@
-const CACHE_NAME = 'himagro-cms-v3-cache';
+const CACHE_NAME = 'himagro-cms-v4-cache';
 const urlsToCache = [
     './',
     'index.html',
@@ -38,28 +38,24 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Fetch with Network First strategy for API calls, Cache First for assets
+// Fetch strategy: Bypass Service Worker for API calls, Cache First for static assets
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    // Network first for API calls
+    // CRITICAL: Bypass Service Worker for Google Apps Script API
+    // This fixes CORS errors and "Failed to convert value to Response"
     if (url.hostname === 'script.google.com') {
-        event.respondWith(
-            fetch(event.request)
-                .then(response => {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => {
-                        cache.put(event.request, responseClone);
-                    });
-                    return response;
-                })
-                .catch(() => caches.match(event.request))
-        );
-    } else {
-        // Cache first for static assets
-        event.respondWith(
-            caches.match(event.request)
-                .then(response => response || fetch(event.request))
-        );
+        return; // Let the browser handle the request normally
     }
+
+    // Cache first strategy for static assets
+    event.respondWith(
+        caches.match(event.request)
+            .then(response => {
+                if (response) {
+                    return response;
+                }
+                return fetch(event.request);
+            })
+    );
 });
