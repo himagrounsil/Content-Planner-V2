@@ -19,7 +19,8 @@ const CONFIG = {
   MEDIA_PARTNER: {
     ID: '1e_FaJw2Csq67PmifCf0ajfWXZHhkSEPO8u0LnquZlqc', // ID Spreadsheet Media Partner
     SHEET_NAME: 'Form Responses 1'
-  }
+  },
+  VERSION: '1.2.0' // Versi Aplikasi
 };
 
 // ==================== WEB APP ENTRY POINT ====================
@@ -62,7 +63,7 @@ function getAllCombinedData() {
     const media = getMediaPartnerData(ssMedia, existingTaskNames);
     const prestasi = getPrestasiData(ssPrestasi);
 
-    return { success: true, tasks, prestasi, media, dropdowns };
+    return { success: true, tasks, prestasi, media, dropdowns, version: CONFIG.VERSION };
   } catch (e) {
     return { success: false, error: 'Optimizer Error: ' + e.message };
   }

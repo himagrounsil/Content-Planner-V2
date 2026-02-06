@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbxr2kyFfWLFOZsntpQmCxltivsb0aTPO4Hx_4iwB8D6zl7-r0GIVl5OLVfJkrCE-G3E/exec'
+    API_URL: 'https://script.google.com/macros/s/AKfycbw8JrweFOEtM01HA1pwbn-Wmj9HoFZfqchJN5fiKGNsJ69YHYJzqG3_hj2EAf6cCO4D/exec'
 };
 
 class AppManager {
@@ -32,10 +32,10 @@ class AppManager {
         await this.loadAllData(true);
         this.switchSection('content-planner', document.querySelector('.nav-item.active'));
 
-        // Auto-sync background setiap 60 detik (Realtime Feel)
+        // Auto-sync background setiap 20 detik (Sangat Realtime)
         setInterval(() => {
             this.loadAllData(false, true);
-        }, 60 * 1000);
+        }, 20 * 1000);
     }
 
     showLoginModal() {
@@ -119,7 +119,15 @@ class AppManager {
         try {
             const result = await this.callAPI('getAllData');
             if (result.success) {
-                // Deteksi Perubahan (Hanya update & notif jika ada data berubah)
+                // --- VERSION CHECK: Deteksi Update Fitur/UI ---
+                const APP_VERSION = '1.2.0';
+                if (result.version && result.version !== APP_VERSION) {
+                    this.showToast('🚀 Versi Baru Tersedia! Klik untuk Update Fitur.', 'info', () => {
+                        location.reload(true);
+                    });
+                }
+
+                // --- DATA SYNC: Deteksi Perubahan Isi Spreadsheet ---
                 const oldHash = JSON.stringify(this.data.tasks);
                 const newHash = JSON.stringify(result.tasks);
 
@@ -522,13 +530,19 @@ class AppManager {
         document.getElementById('loadingSpinner').style.display = isInitial ? 'none' : 'block';
     }
     hideLoading() { document.getElementById('loadingStateContent').style.display = 'none'; }
-    showToast(m, t) {
+    showToast(m, t, callback) {
         const c = document.getElementById('toastContainer');
         const d = document.createElement('div');
         d.className = `toast ${t}`;
         d.textContent = m;
+
+        if (callback) {
+            d.style.cursor = 'pointer';
+            d.onclick = callback;
+        }
+
         c.appendChild(d);
-        setTimeout(() => d.remove(), 3000);
+        setTimeout(() => d.remove(), 6000); // 6 Sec for version notice
     }
 }
 
