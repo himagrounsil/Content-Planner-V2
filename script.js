@@ -32,11 +32,10 @@ class AppManager {
         await this.loadAllData(true);
         this.switchSection('content-planner', document.querySelector('.nav-item.active'));
 
-        // Auto-refresh data PER 5 MENIT agar semua user sinkron otomatis
+        // Auto-sync background setiap 60 detik (Realtime Feel)
         setInterval(() => {
-            console.log('🕒 Auto-syncing data...');
-            this.loadAllData();
-        }, 5 * 60 * 1000);
+            this.loadAllData(false, true);
+        }, 60 * 1000);
     }
 
     showLoginModal() {
@@ -112,24 +111,37 @@ class AppManager {
         });
     }
 
-    async loadAllData(isInitial = false) {
-        console.log(`🔄 ${isInitial ? 'Initial loading' : 'Refreshing'} data...`);
-        this.showLoading(isInitial ? 'Sedang Menyiapkan System...' : 'Merefresh Data...', isInitial);
+    async loadAllData(isInitial = false, isSilent = false) {
+        if (!isSilent) {
+            this.showLoading(isInitial ? 'Sedang Menyiapkan System...' : 'Merefresh Data...', isInitial);
+        }
+
         try {
             const result = await this.callAPI('getAllData');
             if (result.success) {
-                this.data = result;
-                this.populateDropdowns();
-                this.applyFilters();
-                if (!isInitial) this.showToast('Data diperbarui', 'success');
+                // Deteksi Perubahan (Hanya update & notif jika ada data berubah)
+                const oldHash = JSON.stringify(this.data.tasks);
+                const newHash = JSON.stringify(result.tasks);
+
+                if (oldHash !== newHash || isInitial) {
+                    this.data = result;
+                    this.populateDropdowns();
+                    this.applyFilters();
+
+                    if (!isInitial) {
+                        this.showToast(isSilent ? '🔔 Ada update data baru!' : 'Data diperbarui', 'success');
+                    }
+                }
             } else {
-                throw new Error(result.error || 'Server returned error');
+                throw new Error(result.error || 'Server error');
             }
         } catch (error) {
-            console.error('Data load failed:', error);
-            this.showToast('Gagal memuat data! Periksa koneksi.', 'error');
+            if (!isSilent) {
+                console.error('Data load failed:', error);
+                this.showToast('Gagal memuat data!', 'error');
+            }
         } finally {
-            this.hideLoading();
+            if (!isSilent) this.hideLoading();
         }
     }
 
