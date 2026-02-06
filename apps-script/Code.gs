@@ -50,7 +50,6 @@ function doGet(e) {
 
 function getAllCombinedData() {
   try {
-    // Optimization: Open spreadsheets once and reuse
     const ssPlanner = SpreadsheetApp.openById(CONFIG.CONTENT_PLANNER.ID);
     const ssPrestasi = SpreadsheetApp.openById(CONFIG.PRESTASI.ID);
     const ssMedia = SpreadsheetApp.openById(CONFIG.MEDIA_PARTNER.ID);
@@ -61,21 +60,33 @@ function getAllCombinedData() {
     // Pass existing task list to media partner to avoid re-opening planner
     const existingTaskNames = tasks.map(t => `Media Partner (${t.task})`.toLowerCase());
     const media = getMediaPartnerData(ssMedia, existingTaskNames);
-    
     const prestasi = getPrestasiData(ssPrestasi);
 
-    return { tasks, prestasi, media, dropdowns };
+    return { success: true, tasks, prestasi, media, dropdowns };
   } catch (e) {
-    return { error: 'Optimizer Error: ' + e.message };
+    return { success: false, error: 'Optimizer Error: ' + e.message };
   }
+}
+
+function doOptions(e) {
+  // Return empty response for preflight
+  return ContentService.createTextOutput('');
 }
 
 function buildResponse(data, callback) {
   const payload = JSON.stringify(data);
+  
+  // JSONP support for CORS
   if (callback) {
-    return ContentService.createTextOutput(callback + '(' + payload + ')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+    return ContentService
+      .createTextOutput(callback + '(' + payload + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
-  return ContentService.createTextOutput(payload).setMimeType(ContentService.MimeType.JSON);
+  
+  // Standard JSON response
+  return ContentService
+    .createTextOutput(payload)
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ==================== DROPDOWN & LOGGING FUNCTIONS ====================
@@ -178,17 +189,37 @@ function createTaskData(taskData) {
     
     const writeRow = lastNumberRow + 1;
     const newNo = lastNumber + 1;
-    const dueDate = new Date((taskData.dueDate || '') + 'T00:00:00');
     
-    sheet.getRange(writeRow, 1, 1, 11).setValues([[
-      newNo, taskData.task || '', taskData.platform || '', taskData.format || '', 
-      taskData.assignedTo || '', dueDate, '', taskData.inProgress || 'Not Done',
-      taskData.reference || '', taskData.result || '', taskData.notes || ''
-    ]]);
-    sheet.getRange(writeRow, 6).setNumberFormat('yyyy-mm-dd');
-    sheet.getRange(writeRow, 7).setFormula(`=F${writeRow}-TODAY()`);
+    // 1. Tulis Data Dasar satu per satu agar lebih aman
+    sheet.getRange(writeRow, 1).setValue(newNo);
+    sheet.getRange(writeRow, 2).setValue(taskData.task || '');
+    sheet.getRange(writeRow, 3).setValue(taskData.platform || '');
+    sheet.getRange(writeRow, 4).setValue(taskData.format || '');
+    sheet.getRange(writeRow, 5).setValue(taskData.assignedTo || '');
     
+    // 2. Berikan penanganan khusus untuk Tanggal
+    if (taskData.dueDate) {
+      try {
+        const d = new Date(taskData.dueDate.replace(/-/g, '/') + ' 00:00:00');
+        if (!isNaN(d.getTime())) {
+          sheet.getRange(writeRow, 6).setValue(d).setNumberFormat('yyyy-mm-dd');
+          sheet.getRange(writeRow, 7).setFormula(`=F${writeRow}-TODAY()`);
+        }
+      } catch(e) {
+        sheet.getRange(writeRow, 6).setValue(taskData.dueDate);
+      }
+    }
+    
+    // 3. Tulis sisa kolom
+    sheet.getRange(writeRow, 8).setValue(taskData.inProgress || 'Not Done');
+    sheet.getRange(writeRow, 9).setValue(taskData.reference || '');
+    sheet.getRange(writeRow, 10).setValue(taskData.result || '');
+    sheet.getRange(writeRow, 11).setValue(taskData.notes || '');
+    
+    SpreadsheetApp.flush(); // Paksa simpan sekarang juga
     return { success: true, no: newNo };
+  } catch(e) {
+    return { success: false, error: e.message };
   } finally {
     lock.releaseLock();
   }
@@ -203,22 +234,32 @@ function updateTaskData(id, taskData) {
     const lastRow = sheet.getLastRow();
     for (let row = cfg.DATA_START_ROW; row <= lastRow; row++) {
       if (sheet.getRange(row, 1).getValue() == id) {
-        if (taskData.task !== undefined) sheet.getRange(row, 2).setValue(taskData.task);
-        if (taskData.platform !== undefined) sheet.getRange(row, 3).setValue(taskData.platform);
-        if (taskData.format !== undefined) sheet.getRange(row, 4).setValue(taskData.format);
-        if (taskData.assignedTo !== undefined) sheet.getRange(row, 5).setValue(taskData.assignedTo);
-        if (taskData.dueDate !== undefined) {
-          const d = new Date(taskData.dueDate + 'T00:00:00');
-          sheet.getRange(row, 6).setValue(d).setNumberFormat('yyyy-mm-dd');
-          sheet.getRange(row, 7).setFormula(`=F${row}-TODAY()`);
+        if (taskData.task) sheet.getRange(row, 2).setValue(taskData.task);
+        if (taskData.platform) sheet.getRange(row, 3).setValue(taskData.platform);
+        if (taskData.format) sheet.getRange(row, 4).setValue(taskData.format);
+        if (taskData.assignedTo) sheet.getRange(row, 5).setValue(taskData.assignedTo);
+        
+        if (taskData.dueDate) {
+          const d = new Date(taskData.dueDate.replace(/-/g, '/') + ' 00:00:00');
+          if (!isNaN(d.getTime())) {
+            sheet.getRange(row, 6).setValue(d).setNumberFormat('yyyy-mm-dd');
+          } else {
+            sheet.getRange(row, 6).setValue(taskData.dueDate);
+          }
         }
-        if (taskData.inProgress !== undefined) sheet.getRange(row, 8).setValue(taskData.inProgress);
+        
+        if (taskData.inProgress) sheet.getRange(row, 8).setValue(taskData.inProgress);
         if (taskData.reference !== undefined) sheet.getRange(row, 9).setValue(taskData.reference);
         if (taskData.result !== undefined) sheet.getRange(row, 10).setValue(taskData.result);
         if (taskData.notes !== undefined) sheet.getRange(row, 11).setValue(taskData.notes);
+        
+        SpreadsheetApp.flush();
         return { success: true };
       }
     }
+    return { success: false, error: 'ID tidak ditemukan' };
+  } catch(e) {
+    return { success: false, error: e.message };
   } finally {
     lock.releaseLock();
   }
@@ -227,13 +268,24 @@ function updateTaskData(id, taskData) {
 function deleteTaskData(id) {
   const cfg = CONFIG.CONTENT_PLANNER;
   const sheet = SpreadsheetApp.openById(cfg.ID).getSheetByName(cfg.SHEET_NAME);
-  const lastRow = sheet.getLastRow();
-  for (let row = cfg.DATA_START_ROW; row <= lastRow; row++) {
-    // Cari baris berdasarkan ID di kolom pertama (No)
-    if (sheet.getRange(row, 1).getValue() == id) {
-      sheet.deleteRow(row); // Hapus baris secara fisik
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < cfg.DATA_START_ROW) return { success: false, error: 'Sheet kosong' };
+    const ids = sheet.getRange(cfg.DATA_START_ROW, 1, lastRow - cfg.DATA_START_ROW + 1, 1).getValues().flat();
+    const rowIdx = ids.indexOf(id);
+    
+    if (rowIdx > -1) {
+      sheet.deleteRow(cfg.DATA_START_ROW + rowIdx);
+      SpreadsheetApp.flush();
       return { success: true };
     }
+    return { success: false, error: 'ID ' + id + ' tidak ditemukan' };
+  } catch(e) {
+    return { success: false, error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 

@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbz_aR8K15x7glFS2tgthNrsBScUw_1TqHPveG_AQraOAuAEsp21eDVGg-_KjiOvTRxf/exec',
+    API_URL: 'https://script.google.com/macros/s/AKfycbxr2kyFfWLFOZsntpQmCxltivsb0aTPO4Hx_4iwB8D6zl7-r0GIVl5OLVfJkrCE-G3E/exec'
 };
 
 class AppManager {
@@ -22,7 +22,6 @@ class AppManager {
     }
 
     async proceedWithInit() {
-        // First visit check for Guide
         const hasSeenGuide = localStorage.getItem('himagro_seen_guide');
         if (!hasSeenGuide) {
             setTimeout(() => window.openGuide(), 1500);
@@ -30,8 +29,14 @@ class AppManager {
         }
 
         this.setupEventListeners();
-        await this.loadAllData(true); // Pass true for initial load
+        await this.loadAllData(true);
         this.switchSection('content-planner', document.querySelector('.nav-item.active'));
+
+        // Auto-refresh data PER 5 MENIT agar semua user sinkron otomatis
+        setInterval(() => {
+            console.log('🕒 Auto-syncing data...');
+            this.loadAllData();
+        }, 5 * 60 * 1000);
     }
 
     showLoginModal() {
@@ -68,171 +73,184 @@ class AppManager {
                 }
             });
         }
+
+        // PWA Install Logic
+        const installBtn = document.getElementById('installBtn');
+        let deferredPrompt;
+
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+        if (isIOS && !isStandalone) {
+            if (installBtn) {
+                installBtn.style.display = 'flex';
+                installBtn.addEventListener('click', () => {
+                    this.showToast('Safari iPhone: Klik Share > Add to Home Screen', 'info');
+                });
+            }
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (installBtn) {
+                installBtn.style.display = 'flex';
+                installBtn.onclick = async () => {
+                    if (deferredPrompt) {
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        if (outcome === 'accepted') installBtn.style.display = 'none';
+                        deferredPrompt = null;
+                    }
+                };
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            if (installBtn) installBtn.style.display = 'none';
+            deferredPrompt = null;
+        });
     }
 
     async loadAllData(isInitial = false) {
+        console.log(`🔄 ${isInitial ? 'Initial loading' : 'Refreshing'} data...`);
         this.showLoading(isInitial ? 'Sedang Menyiapkan System...' : 'Merefresh Data...', isInitial);
         try {
-            // SINGLE CALL to speed up loading
-            const response = await fetch(`${CONFIG.API_URL}?action=getAllData`);
-            const allData = await response.json();
-
-            if (allData.error) throw new Error(allData.error);
-
-            this.data = allData;
-            this.populateDropdowns();
-            this.applyFilters();
-            if (!isInitial) this.showToast('Data berhasil diperbarui', 'success');
+            const result = await this.callAPI('getAllData');
+            if (result.success) {
+                this.data = result;
+                this.populateDropdowns();
+                this.applyFilters();
+                if (!isInitial) this.showToast('Data diperbarui', 'success');
+            } else {
+                throw new Error(result.error || 'Server returned error');
+            }
         } catch (error) {
-            console.error('Initial load failed:', error);
-            this.showToast('Gagal memuat data! Periksa koneksi internet.', 'error');
+            console.error('Data load failed:', error);
+            this.showToast('Gagal memuat data! Periksa koneksi.', 'error');
         } finally {
             this.hideLoading();
         }
     }
 
+    async callAPI(action, params = {}) {
+        const query = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+        const url = `${CONFIG.API_URL}?action=${action}${query ? '&' + query : ''}`;
+
+        return new Promise((resolve, reject) => {
+            const callbackName = 'jsonp_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('Koneksi timeout (30s)'));
+            }, 30000);
+
+            const cleanup = () => {
+                clearTimeout(timeout);
+                delete window[callbackName];
+                const script = document.getElementById(callbackName);
+                if (script) script.remove();
+            };
+
+            window[callbackName] = (data) => {
+                cleanup();
+                resolve(data);
+            };
+
+            const script = document.createElement('script');
+            script.id = callbackName;
+            script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + callbackName;
+            script.onerror = () => {
+                cleanup();
+                // Fallback attempt for non-JSONP if it's a mutation
+                if (action !== 'getAllData') {
+                    fetch(url, { mode: 'no-cors' }).then(() => resolve({ success: true, fallback: true }));
+                } else {
+                    reject(new Error('Gagal memuat script API'));
+                }
+            };
+            document.body.appendChild(script);
+        });
+    }
+
     populateDropdowns() {
         const { assignedTo, format } = this.data.dropdowns;
+        if (!assignedTo || !format) return;
 
-        // Update Filters
-        const filterAssignee = document.getElementById('filterAssignee');
-        const filterFormat = document.getElementById('filterFormat');
+        const setOptions = (id, options, defaultText) => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = `<option value="">${defaultText}</option>` + options.map(o => `<option value="${o}">${o}</option>`).join('');
+        };
 
-        if (filterAssignee) {
-            filterAssignee.innerHTML = '<option value="">Assigned To</option>' +
-                assignedTo.map(a => `<option value="${a}">${a}</option>`).join('');
-        }
-        if (filterFormat) {
-            filterFormat.innerHTML = '<option value="">Format</option>' +
-                format.map(f => `<option value="${f}">${f}</option>`).join('');
-        }
+        setOptions('filterAssignee', assignedTo, 'Assigned To');
+        setOptions('filterFormat', format, 'Format');
 
-        // Update Modal Forms (Normal & Bulk)
-        const modalAssignees = document.querySelectorAll('select[name="assignedTo"]');
-        const modalFormats = document.querySelectorAll('select[name="format"]');
-
-        modalAssignees.forEach(select => {
-            select.innerHTML = assignedTo.map(a => `<option value="${a}">${a}</option>`).join('');
+        document.querySelectorAll('select[name="assignedTo"]').forEach(s => {
+            s.innerHTML = assignedTo.map(o => `<option value="${o}">${o}</option>`).join('');
         });
-        modalFormats.forEach(select => {
-            select.innerHTML = format.map(f => `<option value="${f}">${f}</option>`).join('');
+        document.querySelectorAll('select[name="format"]').forEach(s => {
+            s.innerHTML = format.map(o => `<option value="${o}">${o}</option>`).join('');
         });
     }
 
     async logActivity(action, targetId, details) {
         try {
-            const logData = {
-                user: this.userName,
-                action: action,
-                targetId: targetId,
-                details: details
-            };
-            await fetch(`${CONFIG.API_URL}?action=logActivity&data=${encodeURIComponent(JSON.stringify(logData))}`);
-        } catch (e) {
-            console.error('Log failed', e);
-        }
+            const logData = { user: this.userName, action, targetId, details };
+            await fetch(`${CONFIG.API_URL}?action=logActivity&data=${encodeURIComponent(JSON.stringify(logData))}`, { mode: 'no-cors' });
+        } catch (e) { }
     }
 
     async clearCache() {
-        this.showLoading('Membersihkan Cache...');
-        this.data = { tasks: [], prestasi: [], media: [] };
-        this.filteredData = { tasks: [], prestasi: [], media: [] };
-        // If there were any localStorage keys, clear them here
-        await this.loadAllData();
-        this.showToast('Cache dibersihkan', 'success');
+        localStorage.clear();
+        this.showToast('Cache & Session dihapus', 'success');
+        setTimeout(() => location.reload(), 500);
     }
 
     logout() {
-        this.showConfirmNotification(
-            'Apakah Anda yakin ingin logout? Nama Anda akan dihapus dari sistem ini.',
-            () => {
-                localStorage.removeItem('himagro_user');
-                this.showToast('Logout berhasil, mengalihkan...', 'success');
-                setTimeout(() => location.reload(), 1000);
-            },
-            'Ya, Logout',
-            'Batal'
-        );
+        this.showConfirmNotification('Logout dari sistem?', () => {
+            localStorage.removeItem('himagro_user');
+            location.reload();
+        }, 'Ya, Logout', 'Batal');
     }
 
     async switchSection(sectionId, element) {
+        if (!element) return;
         document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
         element.classList.add('active');
         document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
         document.getElementById(`${sectionId}-section`).classList.add('active');
         this.currentSection = sectionId;
 
-        // Update Dynamic Titles & Subtitles
-        const sectionInfo = {
-            'content-planner': {
-                title: 'Content Planner',
-                subtitle: 'Modul untuk mengatur, menjadwalkan, dan memantau konten agar pengelolaan informasi berjalan terstruktur dan terkoordinasi.'
-            },
-            'prestasi': {
-                title: 'Prestasi Mahasiswa',
-                subtitle: 'Fitur pengelolaan data prestasi mahasiswa sebagai arsip internal dan bahan publikasi resmi.'
-            },
-            'media-partner': {
-                title: 'Media Partner',
-                subtitle: 'Menu pengelolaan data dan kerja sama media partner untuk mendukung kebutuhan publikasi dan kolaborasi.'
-            }
+        const titles = {
+            'content-planner': ['Content Planner', 'Modul pusat pengaturan konten.'],
+            'prestasi': ['Prestasi Mahasiswa', 'Arsip pencapaian mahasiswa.'],
+            'media-partner': ['Media Partner', 'Manajemen kolaborasi eksternal.']
         };
 
-        const info = sectionInfo[sectionId];
-        document.getElementById('pageTitle').textContent = info.title;
-        document.getElementById('pageSubtitle').textContent = info.subtitle;
+        const [t, s] = titles[sectionId];
+        document.getElementById('pageTitle').textContent = t;
+        document.getElementById('pageSubtitle').textContent = s;
 
-        // Close mobile menu if open
-        const navContainer = document.getElementById('navContainer');
-        const menuToggle = document.getElementById('menuToggle');
-        if (navContainer && navContainer.classList.contains('active')) {
-            navContainer.classList.remove('active');
-            const icon = menuToggle?.querySelector('i');
-            if (icon) icon.className = 'fas fa-bars';
-        }
+        if (sectionId === 'content-planner') this.renderTasks();
+        else if (sectionId === 'prestasi') this.renderPrestasi();
+        else if (sectionId === 'media-partner') this.renderMediaPartner();
 
-        if (sectionId === 'content-planner') {
-            this.applyFilters();
-        } else if (sectionId === 'prestasi') {
-            this.renderPrestasi();
-        } else if (sectionId === 'media-partner') {
-            this.renderMediaPartner();
-        }
+        // Close menu
+        document.getElementById('navContainer').classList.remove('active');
+        const icon = document.getElementById('menuToggle')?.querySelector('i');
+        if (icon) icon.className = 'fas fa-bars';
     }
 
     switchView(view, element) {
         document.querySelectorAll('.view-btn').forEach(el => el.classList.remove('active'));
         element.classList.add('active');
         this.currentView = view;
-
-        const monthNav = document.getElementById('monthNavigation');
-        monthNav.style.display = (view === 'monthly' || view === 'calendar') ? 'flex' : 'none';
-
-        if (window.clearSelection) window.clearSelection(); // Clear select state on view change
+        document.getElementById('monthNavigation').style.display = (view === 'list') ? 'none' : 'flex';
         this.renderTasks();
     }
 
-    handleSearch(val) {
-        const term = val.toLowerCase();
-        if (this.currentSection === 'content-planner') {
-            this.filteredData.tasks = this.data.tasks.filter(t =>
-                t.task.toLowerCase().includes(term) ||
-                t.assignedTo.toLowerCase().includes(term)
-            );
-            this.renderTasks();
-        } else if (this.currentSection === 'prestasi') {
-            const filtered = this.data.prestasi.filter(t =>
-                t.nama.toLowerCase().includes(term) ||
-                t.kegiatan.toLowerCase().includes(term)
-            );
-            this.renderPrestasi(filtered);
-        } else if (this.currentSection === 'media-partner') {
-            const filtered = this.data.media.filter(t =>
-                t.instansi.toLowerCase().includes(term) ||
-                t.kegiatan.toLowerCase().includes(term)
-            );
-            this.renderMediaPartner(filtered);
-        }
+    handleSearch() {
+        // Redundant with renderTasks unification
+        this.renderTasks();
     }
 
     changeMonth(delta) {
@@ -242,671 +260,357 @@ class AppManager {
 
     applyFilters() {
         if (this.currentSection !== 'content-planner') return;
-
-        const platform = document.getElementById('filterPlatform').value;
-        const assignee = document.getElementById('filterAssignee').value;
-        const format = document.getElementById('filterFormat').value;
-
-        this.filteredData.tasks = this.data.tasks.filter(t => {
-            return (!platform || t.platform === platform) &&
-                (!assignee || t.assignedTo === assignee) &&
-                (!format || t.format === format);
-        });
-
         this.renderTasks();
         this.updateStats();
     }
 
     renderTasks() {
-        const container = document.getElementById('contentPlannerList');
-        container.className = this.currentView === 'calendar' ? '' : 'data-grid';
-        container.innerHTML = '';
+        const cont = document.getElementById('contentPlannerList');
+        if (!cont) return;
+        cont.className = this.currentView === 'calendar' ? '' : 'data-grid';
+        cont.innerHTML = '';
 
-        const monthStr = this.currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-        document.getElementById('currentMonthDisplay').textContent = monthStr;
+        document.getElementById('currentMonthDisplay').textContent = this.currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
-        if (this.currentView === 'calendar') {
-            this.renderCalendar(container);
-            return;
-        }
+        if (this.currentView === 'calendar') return this.renderCalendar(cont);
 
-        let tasksToRender = [...this.filteredData.tasks];
+        // --- UNIFIED FILTERING ---
+        const platform = document.getElementById('filterPlatform')?.value || '';
+        const assignee = document.getElementById('filterAssignee')?.value || '';
+        const format = document.getElementById('filterFormat')?.value || '';
+        const searchTerm = document.getElementById('searchBox')?.value.toLowerCase() || '';
+
+        let tasks = this.data.tasks.filter(t => {
+            const matchesFilter = (!platform || t.platform === platform) &&
+                (!assignee || t.assignedTo === assignee) &&
+                (!format || t.format === format);
+            const matchesSearch = t.task.toLowerCase().includes(searchTerm) ||
+                t.assignedTo.toLowerCase().includes(searchTerm);
+            return matchesFilter && matchesSearch;
+        });
 
         if (this.currentView === 'monthly') {
-            const year = this.currentDate.getFullYear();
-            const month = this.currentDate.getMonth();
-            tasksToRender = tasksToRender.filter(t => {
+            const y = this.currentDate.getFullYear(), m = this.currentDate.getMonth();
+            tasks = tasks.filter(t => {
                 const d = new Date(t.dueDate);
-                return d.getFullYear() === year && d.getMonth() === month;
+                return d.getFullYear() === y && d.getMonth() === m;
             });
         }
 
-        tasksToRender.forEach(task => {
-            container.appendChild(this.createTaskCard(task));
+        // --- SORT: Closest deadline first ---
+        tasks.sort((a, b) => {
+            const da = new Date(a.dueDate), db = new Date(b.dueDate);
+            if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0;
+            return da - db;
         });
+
+        tasks.forEach(t => cont.appendChild(this.createTaskCard(t)));
     }
 
-    createTaskCard(task) {
+    createTaskCard(t) {
         const div = document.createElement('div');
         div.className = 'grid-card';
-        const isDone = task.inProgress === 'Done';
-
         div.innerHTML = `
             <div class="grid-card-header">
-                <input type="checkbox" class="task-checkbox" 
-                       data-task-id="${task.no}" 
-                       onclick="event.stopPropagation(); toggleTaskSelection(${task.no})"
-                       style="margin-right: 12px; width: 18px; height: 18px; cursor: pointer;">
-                <h3 style="flex: 1;">${task.task}</h3>
-                <select class="status-dropdown" onchange="app.quickUpdateStatus(${task.no}, this.value)" onclick="event.stopPropagation()">
-                    <option value="Not Done" ${task.inProgress === 'Not Done' ? 'selected' : ''}>Not Done</option>
-                    <option value="On Progress" ${task.inProgress === 'On Progress' ? 'selected' : ''}>In Progress</option>
-                    <option value="Ready To Upload" ${task.inProgress === 'Ready To Upload' ? 'selected' : ''}>Ready</option>
-                    <option value="Done" ${task.inProgress === 'Done' ? 'selected' : ''}>Selesai</option>
+                <input type="checkbox" class="task-checkbox" data-task-id="${t.no}" onclick="event.stopPropagation(); toggleTaskSelection(${t.no})">
+                <h3 style="flex: 1;">${t.task}</h3>
+                <select class="status-dropdown" onchange="app.quickUpdateStatus(${t.no}, this.value)" onclick="event.stopPropagation()">
+                    <option value="Not Done" ${t.inProgress === 'Not Done' ? 'selected' : ''}>Not Done</option>
+                    <option value="On Progress" ${t.inProgress === 'On Progress' ? 'selected' : ''}>In Progress</option>
+                    <option value="Ready To Upload" ${t.inProgress === 'Ready To Upload' ? 'selected' : ''}>Ready</option>
+                    <option value="Done" ${t.inProgress === 'Done' ? 'selected' : ''}>Selesai</option>
                 </select>
             </div>
-            <div class="grid-info-row"><i class="fas fa-user"></i> ${task.assignedTo}</div>
-            <div class="grid-info-row"><i class="fas fa-calendar"></i> ${task.dueDate}</div>
-            <div class="grid-info-row"><i class="fas fa-bullseye"></i> ${task.platform} - ${task.format}</div>
+            <div class="grid-info-row"><i class="fas fa-user"></i> ${t.assignedTo}</div>
+            <div class="grid-info-row"><i class="fas fa-calendar"></i> ${t.dueDate}</div>
+            <div class="grid-info-row"><i class="fas fa-bullseye"></i> ${t.platform} - ${t.format}</div>
             <div style="margin-top:auto; display:flex; gap:10px; justify-content:flex-end;">
-                <button class="btn-text btn-edit" onclick="event.stopPropagation(); app.editTask(${task.no})">Edit</button>
-                <button class="btn-text btn-delete" onclick="event.stopPropagation(); app.deleteTask(${task.no})">Hapus</button>
+                <button class="btn-text btn-edit" onclick="event.stopPropagation(); app.editTask(${t.no})">Edit</button>
+                <button class="btn-text btn-delete" onclick="event.stopPropagation(); app.deleteTask(${t.no})">Hapus</button>
             </div>
         `;
-        div.onclick = () => this.showTaskDetail(task);
+        div.onclick = () => this.showTaskDetail(t);
         return div;
     }
 
-    renderCalendar(container) {
-        container.innerHTML = `<div class="calendar-container">
-            <div class="calendar-grid" id="calendarGridMain"></div>
-        </div>`;
+    renderCalendar(cont) {
+        cont.innerHTML = `<div class="calendar-container"><div class="calendar-grid" id="calGrid"></div></div>`;
+        const grid = document.getElementById('calGrid');
+        ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].forEach(l => grid.innerHTML += `<div class="calendar-day-label">${l}</div>`);
 
-        const grid = document.getElementById('calendarGridMain');
-        const labels = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-        labels.forEach(l => grid.innerHTML += `<div class="calendar-day-label">${l}</div>`);
+        const y = this.currentDate.getFullYear(), m = this.currentDate.getMonth();
+        const first = new Date(y, m, 1).getDay(), last = new Date(y, m + 1, 0).getDate();
+        for (let i = 0; i < first; i++) grid.innerHTML += `<div class="calendar-cell"></div>`;
 
-        const year = this.currentDate.getFullYear();
-        const month = this.currentDate.getMonth();
-        const firstDay = new Date(year, month, 1).getDay();
-        const lastDate = new Date(year, month + 1, 0).getDate();
-
-        for (let i = 0; i < firstDay; i++) grid.innerHTML += `<div class="calendar-cell"></div>`;
-
-        const today = new Date();
-        const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
-
-        for (let d = 1; d <= lastDate; d++) {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const tasks = this.filteredData.tasks.filter(t => t.dueDate === dateStr);
-            let tasksHtml = tasks.map(t => `<div class="calendar-task" onclick="event.stopPropagation(); app.showTaskDetail(${JSON.stringify(t).replace(/"/g, '&quot;')})">${t.task}</div>`).join('');
-
-            grid.innerHTML += `<div class="calendar-cell ${isCurrentMonth && d === today.getDate() ? 'today' : ''}">
-                <div class="calendar-date">${d}</div>
-                ${tasksHtml}
-            </div>`;
+        const nowStr = new Date().toISOString().split('T')[0];
+        for (let d = 1; d <= last; d++) {
+            const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const tasks = this.filteredData.tasks.filter(t => t.dueDate === dStr);
+            grid.innerHTML += `
+                <div class="calendar-cell ${dStr === nowStr ? 'today' : ''}">
+                    <div class="calendar-date">${d}</div>
+                    ${tasks.map(t => `<div class="calendar-task" onclick="event.stopPropagation(); app.showTaskDetail(${JSON.stringify(t).replace(/"/g, '&quot;')})">${t.task}</div>`).join('')}
+                </div>`;
         }
     }
 
-    renderPrestasi(prestasiToRender = null) {
+    renderPrestasi() {
         const grid = document.getElementById('prestasiGrid');
+        if (!grid) return;
         grid.innerHTML = '';
-        const items = prestasiToRender || this.data.prestasi;
-        items.forEach(item => {
-            const card = document.createElement('div');
-            card.className = 'grid-card';
-            const timeDisplay = window.formatRelativeTime ? window.formatRelativeTime(item.timestamp) : item.timestamp;
-            card.innerHTML = `
-                <h3>${item.nama}</h3>
-                <div class="grid-info-row"><i class="fas fa-id-card"></i> ${item.npm}</div>
-                <div class="grid-info-row"><i class="fas fa-trophy"></i> ${item.kegiatan}</div>
-                <div class="grid-info-row"><i class="fas fa-layer-group"></i> ${item.tingkat}</div>
-                <div class="grid-info-row"><i class="fas fa-clock"></i> ${timeDisplay}</div>
-            `;
-            card.onclick = () => this.showPrestasiDetail(item);
-            grid.appendChild(card);
+        const term = document.getElementById('searchBox')?.value.toLowerCase() || '';
+
+        const filtered = this.data.prestasi.filter(item =>
+            item.nama.toLowerCase().includes(term) ||
+            item.kegiatan.toLowerCase().includes(term)
+        );
+
+        filtered.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'grid-card';
+            div.innerHTML = `<h3>${item.nama}</h3><div class="grid-info-row"><i class="fas fa-id-card"></i> ${item.npm}</div><div class="grid-info-row"><i class="fas fa-trophy"></i> ${item.kegiatan}</div><div class="grid-info-row"><i class="fas fa-clock"></i> ${formatRelativeTime(item.timestamp)}</div>`;
+            div.onclick = () => this.showPrestasiDetail(item);
+            grid.appendChild(div);
         });
     }
 
-    renderMediaPartner(mediaToRender = null) {
+    renderMediaPartner() {
         const grid = document.getElementById('mediaPartnerGrid');
+        if (!grid) return;
         grid.innerHTML = '';
-        const items = mediaToRender || this.data.media;
-        items.forEach(item => {
-            const hasProposal = (item.proposal && item.proposal.length > 5) || item.proposal === 'Ya';
-            const hasSurat = (item.surat && item.surat.length > 5) || item.surat === 'Ya';
-            const hasPoster = item.poster === 'Ya';
-            const hasCaption = item.caption === 'Ya';
-            const taskCreated = item.taskCreated === 'TRUE';
+        const term = document.getElementById('searchBox')?.value.toLowerCase() || '';
 
-            const card = document.createElement('div');
-            card.className = 'grid-card';
-            card.innerHTML = `
-                <h3>
-                    ${item.kegiatan}
-                    ${taskCreated ? '<span class="badge-created">✓ Task Dibuat</span>' : ''}
-                </h3>
+        const filtered = this.data.media.filter(item =>
+            item.instansi.toLowerCase().includes(term) ||
+            item.kegiatan.toLowerCase().includes(term)
+        );
+
+        filtered.forEach(item => {
+            const created = item.taskCreated === 'TRUE';
+            const div = document.createElement('div');
+            div.className = 'grid-card';
+            div.innerHTML = `
+                <h3>${item.kegiatan} ${created ? '<span class="badge-created">✓</span>' : ''}</h3>
                 <div class="grid-info-row"><i class="fas fa-building"></i> ${item.instansi}</div>
-                <div class="grid-info-row" style="margin-top: 8px; flex-wrap: wrap; gap: 12px;">
-                    <span><i class="fas fa-check-circle" style="color: ${hasProposal ? 'var(--primary)' : 'var(--text-muted)'}"></i> Prop</span>
-                    <span><i class="fas fa-check-circle" style="color: ${hasSurat ? 'var(--primary)' : 'var(--text-muted)'}"></i> Surat</span>
-                    <span><i class="fas fa-check-circle" style="color: ${hasPoster ? 'var(--primary)' : 'var(--text-muted)'}"></i> Poster</span>
-                    <span><i class="fas fa-check-circle" style="color: ${hasCaption ? 'var(--primary)' : 'var(--text-muted)'}"></i> Cap</span>
-                </div>
-                <div style="margin-top:auto; display:flex; gap:10px; padding-top: 12px;">
-                    <button class="btn btn-primary" style="font-size:0.75rem; flex:1" 
-                            onclick="event.stopPropagation(); app.automateTask(${JSON.stringify(item).replace(/"/g, '&quot;')})"
-                            ${taskCreated ? 'disabled' : ''}>
-                        <i class="fas fa-magic"></i> ${taskCreated ? 'Sudah Ditambahkan' : 'Auto Planner'}
+                <div style="margin-top:auto; display:flex; gap:8px; padding-top:10px;">
+                    <button class="btn btn-primary" style="flex:1; font-size:0.75rem" onclick="event.stopPropagation(); app.automateTask(${JSON.stringify(item).replace(/"/g, '&quot;')})" ${created ? 'disabled' : ''}>
+                        ${created ? 'Ditambahkan' : 'Auto Plan'}
                     </button>
-                    <a href="https://wa.me/${item.wa?.replace(/\D/g, '')}" target="_blank" class="btn" 
-                       style="padding: 0 12px; background: #25D366; color: white;" onclick="event.stopPropagation()">
-                        <i class="fab fa-whatsapp"></i>
-                    </a>
-                </div>
-            `;
-            card.onclick = () => this.showMediaDetail(item);
-            grid.appendChild(card);
+                    <a href="https://wa.me/${item.wa?.replace(/\D/g, '')}" target="_blank" class="btn" style="background:#25D366; width:40px;"><i class="fab fa-whatsapp"></i></a>
+                </div>`;
+            div.onclick = () => this.showMediaDetail(item);
+            grid.appendChild(div);
         });
     }
 
     updateStats() {
-        const tasks = this.filteredData.tasks;
-        document.getElementById('totalTasks').textContent = tasks.length;
-        document.getElementById('completedTasks').textContent = tasks.filter(t => t.inProgress === 'Done').length;
-        document.getElementById('inProgressTasks').textContent = tasks.filter(t => t.inProgress === 'On Progress' || t.inProgress === 'Ready To Upload').length;
+        const t = this.data.tasks;
+        const sets = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        sets('totalTasks', t.length);
+        sets('completedTasks', t.filter(x => x.inProgress === 'Done').length);
+        sets('inProgressTasks', t.filter(x => x.inProgress === 'On Progress' || x.inProgress === 'Ready To Upload').length);
 
-        const urgent = tasks.filter(t => t.inProgress !== 'Done' && t.dateLeft !== undefined && t.dateLeft <= 3).length;
-        document.getElementById('urgentTasks').textContent = urgent;
+        const urgent = t.filter(x => {
+            const isNotDone = x.inProgress !== 'Done';
+            const days = parseInt(x.dateLeft);
+            return isNotDone && !isNaN(days) && days <= 3;
+        }).length;
+        sets('urgentTasks', urgent);
     }
 
-    // --- ACTIONS ---
     async handleTaskSubmit(e) {
         e.preventDefault();
-        const formData = new FormData(e.target);
-        const taskData = Object.fromEntries(formData.entries());
-        const taskId = e.target.dataset.taskId;
+        const form = e.target, id = form.dataset.taskId, data = Object.fromEntries(new FormData(form).entries());
+        if (!data.assignedTo || !data.dueDate) return this.showToast('Data belum lengkap!', 'error');
 
-        this.showLoading(taskId ? 'Memperbarui Task...' : 'Menambahkan Task Baru...');
-        try {
-            const actionUrl = taskId ? `updateTask&id=${taskId}` : 'createTask';
-            // Add timestamp to bypass any caching
-            const fullUrl = `${CONFIG.API_URL}?action=${actionUrl}&data=${encodeURIComponent(JSON.stringify(taskData))}&t=${Date.now()}`;
-
-            await fetch(fullUrl, { mode: 'cors', redirect: 'follow' });
-
-            // Log the activity
-            await this.logActivity(taskId ? 'UPDATE' : 'CREATE', taskId || 'NEW', `Task: ${taskData.task}`);
-
-            this.showToast('Berhasil disimpan!', 'success');
-            this.closeModal();
-            await this.loadAllData();
-        } catch (error) {
-            this.showToast('Gagal menyimpan!', 'error');
-        } finally {
-            this.hideLoading();
+        this.showLoading('Menyimpan...');
+        // Optimistic UI
+        if (id) {
+            const t = this.data.tasks.find(x => x.no == id);
+            if (t) Object.assign(t, data);
         }
+        this.applyFilters();
+        this.closeModal();
+
+        try {
+            const res = await this.callAPI(id ? 'updateTask' : 'createTask', { id: id || '', data: JSON.stringify(data) });
+            if (res.success) {
+                this.showToast('Berhasil disimpan', 'success');
+                await this.loadAllData();
+            } else throw new Error(res.error);
+        } catch (err) {
+            this.showToast('Error: ' + err.message, 'error');
+            await this.loadAllData();
+        } finally { this.hideLoading(); }
     }
 
     editTask(id) {
-        const task = this.data.tasks.find(t => t.no == id);
-        if (!task) return;
-
+        const t = this.data.tasks.find(x => x.no == id);
+        if (!t) return;
         const form = document.getElementById('taskForm');
         form.dataset.taskId = id;
-        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Task';
-
-        // Fill form
-        Object.keys(task).forEach(key => {
-            const input = form.querySelector(`[name="${key}"]`);
-            if (input) input.value = task[key];
-        });
-
+        document.getElementById('modalTitle').textContent = 'Edit Task';
+        Object.keys(t).forEach(k => { if (form[k]) form[k].value = t[k]; });
         this.openModal();
     }
 
     async deleteTask(id) {
-        // Show custom confirmation notification
-        this.showConfirmNotification('Apakah Anda yakin ingin menghapus task ini?', async () => {
-            this.showLoading('Menghapus Task...');
+        this.showConfirmNotification('Hapus task ini?', async () => {
+            this.data.tasks = this.data.tasks.filter(x => x.no != id);
+            this.applyFilters();
             try {
-                await fetch(`${CONFIG.API_URL}?action=deleteTask&id=${id}`);
-                await this.logActivity('DELETE', id, 'Deleted content planner task');
-                this.showToast('Berhasil dihapus', 'success');
-                await this.loadAllData();
-            } catch (error) {
-                this.showToast('Gagal menghapus', 'error');
-            } finally {
-                this.hideLoading();
-            }
+                await this.callAPI('deleteTask', { id });
+                this.showToast('Terhapus', 'success');
+                setTimeout(() => this.loadAllData(), 2000);
+            } catch (e) { this.showToast('Gagal hapus', 'error'); await this.loadAllData(); }
         });
     }
 
     async quickUpdateStatus(no, status) {
-        this.showToast('Mengupdate status...', 'info');
+        const t = this.data.tasks.find(x => x.no == no);
+        if (t) { t.inProgress = status; this.updateStats(); }
         try {
-            await fetch(`${CONFIG.API_URL}?action=updateTask&id=${no}&data=${encodeURIComponent(JSON.stringify({ inProgress: status }))}`);
-            await this.logActivity('STATUS_CHANGE', no, `Quick status update to: ${status}`);
-            this.showToast('Status diperbarui!', 'success');
-            const task = this.data.tasks.find(t => t.no == no);
-            if (task) task.inProgress = status;
-            this.updateStats();
-        } catch (e) {
-            this.showToast('Gagal update status', 'error');
-        }
+            await this.callAPI('updateTask', { id: no, data: JSON.stringify({ inProgress: status }) });
+            this.showToast('Status Update', 'success');
+        } catch (e) { this.showToast('Gagal update', 'error'); }
     }
 
     async automateTask(item) {
-        const taskData = {
-            task: `Media Partner (${item.kegiatan})`,
-            platform: 'Instagram',
-            format: 'Feeds',
-            assignedTo: 'Design Creator',
-            dueDate: item.publikasi || '',
-            inProgress: 'Not Done',
-            notes: `Kegiatan: ${item.kegiatan}\nInstansi: ${item.instansi}`
-        };
-
-        this.showToast('Menambah ke Content Planner...', 'info');
+        const task = { task: `Media Partner (${item.kegiatan})`, platform: 'Instagram', format: 'Feeds', assignedTo: 'Design Creator', dueDate: item.publikasi || '', inProgress: 'Not Done', notes: `Instansi: ${item.instansi}` };
+        this.showLoading('Otomatisasi...');
         try {
-            const data = {
-                rowIdx: item.rowIdx,
-                taskData: taskData
-            };
-            await fetch(`${CONFIG.API_URL}?action=processMedia&data=${encodeURIComponent(JSON.stringify(data))}`);
-            await this.logActivity('AUTO_PLANNER', 'NEW', `Media Partner: ${item.kegiatan}`);
-            this.showToast('Berhasil ditambahkan ke Planner!', 'success');
-            await this.loadAllData();
-        } catch (e) {
-            this.showToast('Gagal otomasi!', 'error');
-        }
+            const res = await this.callAPI('processMedia', { data: JSON.stringify({ rowIdx: item.rowIdx, taskData: task }) });
+            if (res.success) { this.showToast('Auto Plan Berhasil!', 'success'); await this.loadAllData(); }
+        } catch (e) { this.showToast('Gagal otomasi', 'error'); }
+        finally { this.hideLoading(); }
     }
 
-    // --- POPUPS ---
-    showTaskDetail(task) {
-        const body = `
-            <div class="detail-row"><span class="detail-label">Task</span><div class="detail-content">${task.task}</div></div>
-            <div class="detail-row"><span class="detail-label">Platform/Format</span><div class="detail-content">${task.platform} - ${task.format}</div></div>
-            <div class="detail-row"><span class="detail-label">Reference</span><div class="detail-content">${task.reference || '-'}</div></div>
-            <div class="detail-row"><span class="detail-label">Result</span><div class="detail-content">${task.result || '-'}</div></div>
-            <div class="detail-row"><span class="detail-label">Notes</span><div class="detail-content">${task.notes || '-'}</div></div>
-        `;
-        this.showModalDetail('Detail Task', body);
-    }
-
-    showPrestasiDetail(item) {
-        const body = Object.entries(item).map(([k, v]) => `
-            <div class="detail-row"><span class="detail-label">${k.toUpperCase()}</span><div class="detail-content">${v || '-'}</div></div>
-        `).join('');
-        this.showModalDetail('Detail Prestasi', body);
-    }
-
-    showMediaDetail(item) {
-        const labels = {
-            timestamp: 'Timestamp',
-            nama: 'Nama CP',
-            wa: 'WhatsApp',
-            instansi: 'Nama Instansi',
-            kegiatan: 'Nama Kegiatan',
-            proposal: 'Proposal',
-            surat: 'Surat Pengajuan',
-            publikasi: 'Rencana Publikasi',
-            email: 'Email',
-            jenis: 'Jenis Kegiatan',
-            poster: 'Poster Tersedia',
-            caption: 'Caption Tersedia',
-            drive: 'Link Drive Aset'
-        };
-
-        const body = Object.entries(labels).map(([key, label]) => {
-            let val = item[key] || '-';
-
-            // Format indicators
-            if (['proposal', 'surat', 'poster', 'caption'].includes(key)) {
-                const isOk = val.length > 5 || val === 'Ya';
-                val = `<i class="fas fa-check-circle" style="color: ${isOk ? 'var(--primary)' : 'var(--text-muted)'}"></i> ${isOk ? 'Tersedia' : 'Tidak Ada'}`;
-            }
-
-            // Add WhatsApp Button next to number
-            if (key === 'wa' && item.wa) {
-                const cleanWa = item.wa.replace(/\D/g, '');
-                val = `${item.wa} <a href="https://wa.me/${cleanWa}" target="_blank" class="btn" style="padding: 4px 8px; font-size: 0.7rem; background: #25D366; color: white; display: inline-flex; margin-left: 8px;"><i class="fab fa-whatsapp"></i> Hubungi</a>`;
-            }
-
-            // Linkify Drive
-            if (key === 'drive' && item.drive && item.drive.startsWith('http')) {
-                val = `<a href="${item.drive}" target="_blank" style="color: var(--primary); text-decoration: underline; word-break: break-all;">${item.drive}</a>`;
-            }
-
-            return `
-                <div class="detail-row">
-                    <span class="detail-label">${label}</span>
-                    <div class="detail-content">${val}</div>
-                </div>
-            `;
-        }).join('');
-
+    showTaskDetail(t) { this.showModalDetail('Detail Task', `<div class="detail-row"><span class="detail-label">Task</span><div class="detail-content">${t.task}</div></div><div class="detail-row"><span class="detail-label">Ref</span><div class="detail-content">${t.reference || '-'}</div></div><div class="detail-row"><span class="detail-label">Notes</span><div class="detail-content">${t.notes || '-'}</div></div>`); }
+    showPrestasiDetail(i) { const body = Object.entries(i).map(([k, v]) => `<div class="detail-row"><span class="detail-label">${k}</span><div class="detail-content">${v}</div></div>`).join(''); this.showModalDetail('Detail Prestasi', body); }
+    showMediaDetail(i) {
+        const body = [`instansi`, 'kegiatan', 'publikasi', 'wa', 'drive'].map(k => `<div class="detail-row"><span class="detail-label">${k}</span><div class="detail-content">${i[k] || '-'}</div></div>`).join('');
         this.showModalDetail('Detail Media Partner', body);
     }
-
     showModalDetail(title, body) {
         document.getElementById('detailModalTitle').textContent = title;
         document.getElementById('detailModalBody').innerHTML = body;
         document.getElementById('detailModal').style.display = 'flex';
     }
 
-    // --- UI TOOLS ---
-    openModal() {
-        document.getElementById('taskModal').style.display = 'flex';
+    openModal() { document.getElementById('taskModal').style.display = 'flex'; }
+    closeModal() { document.getElementById('taskModal').style.display = 'none'; document.getElementById('taskForm').reset(); delete document.getElementById('taskForm').dataset.taskId; }
+    showLoading(msg, isInitial) {
+        const o = document.getElementById('loadingStateContent');
+        if (o) o.style.display = 'flex';
+        document.getElementById('loadingTitle').textContent = msg;
+        document.getElementById('loadingLogoContainer').style.display = isInitial ? 'block' : 'none';
+        document.getElementById('loadingSpinner').style.display = isInitial ? 'none' : 'block';
     }
-
-    closeModal() {
-        document.getElementById('taskModal').style.display = 'none';
-        document.getElementById('taskForm').reset();
-        delete document.getElementById('taskForm').dataset.taskId;
-    }
-
-    showLoading(message = 'Memproses...', isInitial = false) {
-        const overlay = document.getElementById('loadingStateContent');
-        const logo = document.getElementById('loadingLogoContainer');
-        const spinner = document.getElementById('loadingSpinner');
-        const title = document.getElementById('loadingTitle');
-        const subtitle = document.getElementById('loadingSubtitle');
-
-        if (overlay) overlay.style.display = 'flex';
-        if (title) title.textContent = message;
-        if (subtitle) subtitle.textContent = isInitial ? 'Mohon Tunggu Sebentar' : 'Sistem sedang bekerja';
-
-        if (isInitial) {
-            if (logo) logo.style.display = 'block';
-            if (spinner) spinner.style.display = 'none';
-        } else {
-            if (logo) logo.style.display = 'none';
-            if (spinner) spinner.style.display = 'block';
-        }
-    }
-
-    hideLoading() {
-        const overlay = document.getElementById('loadingStateContent');
-        if (overlay) overlay.style.display = 'none';
-    }
-
+    hideLoading() { document.getElementById('loadingStateContent').style.display = 'none'; }
     showToast(m, t) {
-        const cont = document.getElementById('toastContainer');
-        if (!cont) return; // Fix appendChild error
+        const c = document.getElementById('toastContainer');
         const d = document.createElement('div');
         d.className = `toast ${t}`;
         d.textContent = m;
-        cont.appendChild(d);
-        setTimeout(() => d.remove(), 4000);
+        c.appendChild(d);
+        setTimeout(() => d.remove(), 3000);
     }
 }
 
-// Global scope initialization
-let app;
-document.addEventListener('DOMContentLoaded', () => {
-    app = new AppManager();
-});
+// Global UI Helper
+AppManager.prototype.showConfirmNotification = function (msg, onOk, okT = 'Ya', canT = 'Batal') {
+    const d = document.createElement('div');
+    d.className = 'confirm-notification show';
+    d.innerHTML = `<div class="confirm-content"><p>${msg}</p><div class="confirm-buttons"><button class="btn-confirm-cancel">${canT}</button><button class="btn-confirm-ok">${okT}</button></div></div>`;
+    document.body.appendChild(d);
+    d.querySelector('.btn-confirm-cancel').onclick = () => d.remove();
+    d.querySelector('.btn-confirm-ok').onclick = () => { d.remove(); onOk(); };
+};
 
-// Helper functions for HTML
+// Global Initialization
+let app;
+document.addEventListener('DOMContentLoaded', () => { app = new AppManager(); });
 window.switchSection = (id, el) => app.switchSection(id, el);
+window.handleSearch = (v) => app.handleSearch(v);
 window.openModal = () => app.openModal();
 window.closeModal = () => app.closeModal();
-window.handleSearch = (val) => app.handleSearch(val);
+window.openGuide = () => document.getElementById('guideModal').style.display = 'flex';
+window.closeGuide = () => document.getElementById('guideModal').style.display = 'none';
+window.handleLogin = () => app.handleLogin();
+window.closeDetailModal = () => document.getElementById('detailModal').style.display = 'none';
 
-// Add showConfirmNotification method to AppManager
-AppManager.prototype.showConfirmNotification = function (message, onConfirm, okText = 'Ya, Hapus', cancelText = 'Batal') {
-    const notification = document.createElement('div');
-    notification.className = 'confirm-notification';
-    notification.innerHTML = `
-        <div class="confirm-content">
-            <p>${message}</p>
-            <div class="confirm-buttons">
-                <button class="btn-confirm-cancel">${cancelText}</button>
-                <button class="btn-confirm-ok">${okText}</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(notification);
-
-    // Animate in
-    setTimeout(() => notification.classList.add('show'), 10);
-
-    // Handle buttons
-    notification.querySelector('.btn-confirm-cancel').onclick = () => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-    };
-
-    notification.querySelector('.btn-confirm-ok').onclick = () => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-        onConfirm();
-    };
-};
-
-// Bulk Task Management
-let bulkTasksArray = [];
-
-window.openBulkModal = () => {
-    document.getElementById('bulkModal').style.display = 'flex';
-    bulkTasksArray = [];
-    document.getElementById('bulkTaskList').style.display = 'none';
-    document.getElementById('bulkTaskItems').innerHTML = '';
-    document.getElementById('bulkCount').textContent = '0';
-    document.getElementById('saveBulkBtn').disabled = true;
-    document.getElementById('bulkTaskForm').reset();
-};
-
-window.closeBulkModal = () => {
-    document.getElementById('bulkModal').style.display = 'none';
-    bulkTasksArray = [];
-};
-
+// --- BULK OPERATIONS ---
+let bulkArray = [];
+window.openBulkModal = () => { document.getElementById('bulkModal').style.display = 'flex'; bulkArray = []; updateBulkUI(); };
+window.closeBulkModal = () => document.getElementById('bulkModal').style.display = 'none';
 window.addTaskToBulkList = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const taskData = Object.fromEntries(formData.entries());
-
-    // Add to array
-    bulkTasksArray.push(taskData);
-
-    // Update UI
-    updateBulkTaskList();
-
-    // Reset form
+    bulkArray.push(Object.fromEntries(new FormData(e.target).entries()));
+    updateBulkUI();
     e.target.reset();
-
-    // Show success feedback
-    app.showToast(`Task "${taskData.task}" ditambahkan ke daftar`, 'success');
 };
-
-function updateBulkTaskList() {
-    const listContainer = document.getElementById('bulkTaskList');
-    const itemsContainer = document.getElementById('bulkTaskItems');
-    const countSpan = document.getElementById('bulkCount');
-    const saveBtn = document.getElementById('saveBulkBtn');
-
-    if (bulkTasksArray.length > 0) {
-        listContainer.style.display = 'block';
-        saveBtn.disabled = false;
-        countSpan.textContent = bulkTasksArray.length;
-
-        itemsContainer.innerHTML = bulkTasksArray.map((task, index) => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px;">
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; margin-bottom: 4px;">${task.task}</div>
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                        ${task.platform} • ${task.format} • ${task.assignedTo} • ${task.dueDate}
-                    </div>
-                </div>
-                <button onclick="removeBulkTask(${index})" class="btn-text btn-delete" style="padding: 6px 12px; font-size: 0.8rem;">
-                    Hapus
-                </button>
-            </div>
-        `).join('');
-    } else {
-        listContainer.style.display = 'none';
-        saveBtn.disabled = true;
-    }
+function updateBulkUI() {
+    const list = document.getElementById('bulkTaskList'), items = document.getElementById('bulkTaskItems');
+    list.style.display = bulkArray.length ? 'block' : 'none';
+    document.getElementById('bulkCount').textContent = bulkArray.length;
+    document.getElementById('saveBulkBtn').disabled = !bulkArray.length;
+    items.innerHTML = bulkArray.map((t, i) => `<div class="bulk-item">${t.task} <button onclick="bulkArray.splice(${i},1);updateBulkUI()">X</button></div>`).join('');
 }
-
-window.removeBulkTask = (index) => {
-    bulkTasksArray.splice(index, 1);
-    updateBulkTaskList();
-    app.showToast('Task dihapus dari daftar', 'info');
-};
-
 window.saveBulkTasks = async () => {
-    if (bulkTasksArray.length === 0) {
-        app.showToast('Tidak ada task untuk disimpan', 'error');
-        return;
-    }
-
-    app.showLoading(`Menyimpan ${bulkTasksArray.length} Task...`);
-
+    app.showLoading('Saving bulk...');
     try {
-        // Save all tasks
-        const promises = bulkTasksArray.map(taskData =>
-            fetch(`${CONFIG.API_URL}?action=createTask&data=${encodeURIComponent(JSON.stringify(taskData))}`)
-        );
-
-        await Promise.all(promises);
-
-        await app.logActivity('BULK_CREATE', 'MULTIPLE', `Created ${bulkTasksArray.length} tasks via bulk add`);
-
-        app.showToast(`Berhasil menyimpan ${bulkTasksArray.length} task!`, 'success');
+        await Promise.all(bulkArray.map(t => app.callAPI('createTask', { data: JSON.stringify(t) })));
+        app.showToast('Bulk success!', 'success');
         closeBulkModal();
         await app.loadAllData();
-    } catch (error) {
-        app.showToast('Gagal menyimpan beberapa task', 'error');
-    } finally {
-        app.hideLoading();
-    }
+    } catch (e) { app.showToast('Bulk failed', 'error'); }
+    finally { app.hideLoading(); }
 };
 
-// Bulk Selection Management
 let selectedTasks = new Set();
-
-window.toggleTaskSelection = (taskId) => {
-    if (selectedTasks.has(taskId)) {
-        selectedTasks.delete(taskId);
-    } else {
-        selectedTasks.add(taskId);
-    }
-    updateBulkActionBar();
+window.toggleTaskSelection = (id) => {
+    if (selectedTasks.has(id)) selectedTasks.delete(id); else selectedTasks.add(id);
+    document.getElementById('bulkActionBar').style.display = selectedTasks.size ? 'block' : 'none';
+    document.getElementById('selectedCount').textContent = `${selectedTasks.size} terpilih`;
 };
-
 window.selectAllTasks = () => {
-    const checkboxes = document.querySelectorAll('.task-checkbox');
-    checkboxes.forEach(cb => {
-        const taskId = parseInt(cb.dataset.taskId);
-        selectedTasks.add(taskId);
-        cb.checked = true;
-    });
-    updateBulkActionBar();
+    document.querySelectorAll('.task-checkbox').forEach(c => { selectedTasks.add(parseInt(c.dataset.taskId)); c.checked = true; });
+    window.toggleTaskSelection();
 };
-
 window.clearSelection = () => {
     selectedTasks.clear();
-    document.querySelectorAll('.task-checkbox').forEach(cb => cb.checked = false);
-    updateBulkActionBar();
+    document.querySelectorAll('.task-checkbox').forEach(c => c.checked = false);
+    window.toggleTaskSelection();
 };
-
-function updateBulkActionBar() {
-    const bar = document.getElementById('bulkActionBar');
-    const count = document.getElementById('selectedCount');
-
-    if (selectedTasks.size > 0) {
-        bar.style.display = 'block';
-        count.textContent = `${selectedTasks.size} task dipilih`;
-    } else {
-        bar.style.display = 'none';
-    }
-}
-
 window.applyBulkStatusChange = async () => {
-    const status = document.getElementById('bulkStatusChange').value;
-    if (!status || selectedTasks.size === 0) {
-        app.showToast('Pilih status terlebih dahulu', 'error');
-        return;
-    }
-
-    app.showLoading(`Memperbarui ${selectedTasks.size} Status...`);
-
+    const s = document.getElementById('bulkStatusChange').value;
+    if (!s) return;
+    app.showLoading('Bulk Change...');
     try {
-        const promises = Array.from(selectedTasks).map(taskId =>
-            fetch(`${CONFIG.API_URL}?action=updateTask&id=${taskId}&data=${encodeURIComponent(JSON.stringify({ inProgress: status }))}`)
-        );
-        await Promise.all(promises);
-        await app.logActivity('BULK_STATUS_CHANGE', 'MULTIPLE', `Changed status of ${selectedTasks.size} tasks to ${status}`);
-        app.showToast(`${selectedTasks.size} task berhasil diupdate`, 'success');
-        clearSelection();
+        await Promise.all(Array.from(selectedTasks).map(id => app.callAPI('updateTask', { id, data: JSON.stringify({ inProgress: s }) })));
+        app.showToast('Success!', 'success');
+        window.clearSelection();
         await app.loadAllData();
-    } catch (error) {
-        app.showToast('Gagal update beberapa task', 'error');
-    } finally {
-        app.hideLoading();
-    }
+    } finally { app.hideLoading(); }
 };
-
 window.bulkDeleteTasks = () => {
-    if (selectedTasks.size === 0) return;
-
-    app.showConfirmNotification(
-        `Hapus ${selectedTasks.size} task yang dipilih?`,
-        async () => {
-            app.showLoading();
-            try {
-                const promises = Array.from(selectedTasks).map(taskId =>
-                    fetch(`${CONFIG.API_URL}?action=deleteTask&id=${taskId}`)
-                );
-                await Promise.all(promises);
-                await app.logActivity('BULK_DELETE', 'MULTIPLE', `Deleted ${selectedTasks.size} tasks via bulk selection`);
-                app.showToast(`${selectedTasks.size} task berhasil dihapus`, 'success');
-                clearSelection();
-                await app.loadAllData();
-            } catch (error) {
-                app.showToast('Gagal hapus beberapa task', 'error');
-            } finally {
-                app.hideLoading();
-            }
-        }
-    );
+    app.showConfirmNotification(`Hapus ${selectedTasks.size} task?`, async () => {
+        app.showLoading('Deleting...');
+        try {
+            await Promise.all(Array.from(selectedTasks).map(id => app.callAPI('deleteTask', { id })));
+            window.clearSelection();
+            await app.loadAllData();
+        } finally { app.hideLoading(); }
+    });
 };
 
-// Relative Time Formatting
-window.formatRelativeTime = (timestamp) => {
-    const now = new Date();
-    const date = new Date(timestamp);
-    const diffMs = now - date;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 15) {
-        if (diffDays === 0) return 'Hari ini';
-        if (diffDays === 1) return 'Kemarin';
-        return `${diffDays} hari yang lalu`;
-    } else {
-        return date.toLocaleDateString('id-ID', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-        });
-    }
-};
-
-window.closeDetailModal = () => document.getElementById('detailModal').style.display = 'none';
-window.switchView = (view, el) => app.switchView(view, el);
-window.applyFilters = () => app.applyFilters();
-
-// Guide Handlers
-window.openGuide = () => {
-    document.getElementById('guideModal').style.display = 'flex';
-};
-
-window.closeGuide = () => {
-    document.getElementById('guideModal').style.display = 'none';
-};
-
-window.handleLogin = () => app.handleLogin();
+function formatRelativeTime(ts) {
+    const d = new Date(ts), diff = Math.floor((new Date() - d) / 864e5);
+    if (diff === 0) return 'Hari ini';
+    if (diff === 1) return 'Kemarin';
+    if (diff < 7) return `${diff} hari lalu`;
+    return d.toLocaleDateString('id-ID');
+}

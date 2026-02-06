@@ -19,7 +19,7 @@
     <link rel="apple-touch-icon" href="Logo/Logo Kominfo.png">
 
     <!-- Stylesheets -->
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=12">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
@@ -116,6 +116,10 @@
                 <button class="action-btn" onclick="openGuide()">
                     <i class="fas fa-book"></i>
                     <span>Panduan Penggunaan</span>
+                </button>
+                <button id="installBtn" class="action-btn" style="display: none;">
+                    <i class="fas fa-download"></i>
+                    <span>Install App</span>
                 </button>
                 <button class="action-btn" onclick="app.loadAllData()">
                     <i class="fas fa-sync-alt"></i>
@@ -585,20 +589,18 @@
     <!-- Toast UI -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Service Worker DISABLED to fix CORS issues with Google Apps Script -->
+    <!-- Service Worker Registration -->
     <script>
-        // Unregister ALL existing Service Workers
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function (registrations) {
-                for (let registration of registrations) {
-                    registration.unregister();
-                    console.log('Service Worker unregistered:', registration);
-                }
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(reg => console.log('SW Registered'))
+                    .catch(err => console.log('SW Reg Failed', err));
             });
         }
     </script>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=12"></script>
 </body>
 
 </html>

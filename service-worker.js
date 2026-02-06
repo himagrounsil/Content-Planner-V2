@@ -1,4 +1,4 @@
-const CACHE_NAME = 'himagro-cms-v5-cache';
+const CACHE_NAME = 'himagro-cms-v6-cache';
 const urlsToCache = [
     './',
     'index.html',
