@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbw8JrweFOEtM01HA1pwbn-Wmj9HoFZfqchJN5fiKGNsJ69YHYJzqG3_hj2EAf6cCO4D/exec'
+    API_URL: 'https://script.google.com/macros/s/AKfycbxPiJNRyaa6rIAcLKuUaLUX_ATyhR9XrKkW1qURuNfGojWCPiuZULzESziEyGxkiSgo/exec'
 };
 
 class AppManager {
@@ -193,7 +193,7 @@ class AppManager {
     }
 
     populateDropdowns() {
-        const { assignedTo, format } = this.data.dropdowns;
+        const { assignedTo, format, platform } = this.data.dropdowns;
         if (!assignedTo || !format) return;
 
         const setOptions = (id, options, defaultText) => {
@@ -203,6 +203,7 @@ class AppManager {
 
         setOptions('filterAssignee', assignedTo, 'Assigned To');
         setOptions('filterFormat', format, 'Format');
+        if (platform) setOptions('filterPlatform', platform, 'Platform');
 
         document.querySelectorAll('select[name="assignedTo"]').forEach(s => {
             s.innerHTML = assignedTo.map(o => `<option value="${o}">${o}</option>`).join('');
@@ -210,6 +211,11 @@ class AppManager {
         document.querySelectorAll('select[name="format"]').forEach(s => {
             s.innerHTML = format.map(o => `<option value="${o}">${o}</option>`).join('');
         });
+        if (platform) {
+            document.querySelectorAll('select[name="platform"]').forEach(s => {
+                s.innerHTML = platform.map(o => `<option value="${o}">${o}</option>`).join('');
+            });
+        }
     }
 
     async logActivity(action, targetId, details) {

@@ -102,18 +102,22 @@ function getDropdownData(openedSs) {
     const headers = data[0];
     const subDivCol = headers.indexOf('UniqueSubDiv');
     const formatCol = headers.indexOf('UniqueFormat');
+    const platformCol = headers.indexOf('UniquePlatform');
 
     const assignedTo = [];
     const format = [];
+    const platform = [];
 
     for (let i = 1; i < data.length; i++) {
         if (subDivCol > -1 && data[i][subDivCol]) assignedTo.push(data[i][subDivCol]);
         if (formatCol > -1 && data[i][formatCol]) format.push(data[i][formatCol]);
+        if (platformCol > -1 && data[i][platformCol]) platform.push(data[i][platformCol]);
     }
 
     return { 
         assignedTo: [...new Set(assignedTo)], 
-        format: [...new Set(format)] 
+        format: [...new Set(format)],
+        platform: [...new Set(platform)]
     };
   } catch (e) {
     return { error: e.message };
