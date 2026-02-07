@@ -9,7 +9,7 @@ class AppManager {
         this.currentDate = new Date();
         this.data = { tasks: [], prestasi: [], media: [], dropdowns: { assignedTo: [], format: [] } };
         this.filteredData = { tasks: [], prestasi: [], media: [] };
-        this.userName = localStorage.getItem('himagro_user') || null;
+        this.userName = sessionStorage.getItem('himagro_user') || null;
         this.init();
     }
 
@@ -48,7 +48,7 @@ class AppManager {
         const name = nameInput.value.trim();
         if (name) {
             this.userName = name;
-            localStorage.setItem('himagro_user', this.userName);
+            sessionStorage.setItem('himagro_user', this.userName);
             document.getElementById('loginModal').style.display = 'none';
             this.showLoading();
             this.proceedWithInit();
@@ -127,9 +127,9 @@ class AppManager {
                     });
                 }
 
-                // --- DATA SYNC: Deteksi Perubahan Isi Spreadsheet ---
-                const oldHash = JSON.stringify(this.data.tasks);
-                const newHash = JSON.stringify(result.tasks);
+                // --- DATA SYNC: Deteksi Perubahan Isi Spreadsheet (Task & Dropdown) ---
+                const oldHash = JSON.stringify({ t: this.data.tasks, d: this.data.dropdowns });
+                const newHash = JSON.stringify({ t: result.tasks, d: result.dropdowns });
 
                 if (oldHash !== newHash || isInitial) {
                     this.data = result;
@@ -155,7 +155,7 @@ class AppManager {
 
     async callAPI(action, params = {}) {
         const query = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-        const url = `${CONFIG.API_URL}?action=${action}${query ? '&' + query : ''}`;
+        const url = `${CONFIG.API_URL}?action=${action}${query ? '&' + query : ''}&_cache=${Date.now()}`;
 
         return new Promise((resolve, reject) => {
             const callbackName = 'jsonp_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
@@ -227,7 +227,7 @@ class AppManager {
 
     logout() {
         this.showConfirmNotification('Logout dari sistem?', () => {
-            localStorage.removeItem('himagro_user');
+            sessionStorage.removeItem('himagro_user');
             location.reload();
         }, 'Ya, Logout', 'Batal');
     }
