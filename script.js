@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbxPiJNRyaa6rIAcLKuUaLUX_ATyhR9XrKkW1qURuNfGojWCPiuZULzESziEyGxkiSgo/exec'
+    API_URL: 'https://script.google.com/macros/s/AKfycbyFR1d3aWvTXi2G6hapruNLu9a4SHUmi3Yw6K03BY1w3IRQIj3LPqNTQ2tdY7q-GFnk/exec'
 };
 
 class AppManager {
@@ -7,7 +7,7 @@ class AppManager {
         this.currentSection = 'content-planner';
         this.currentView = 'list';
         this.currentDate = new Date();
-        this.data = { tasks: [], prestasi: [], media: [], dropdowns: { assignedTo: [], format: [] } };
+        this.data = { tasks: [], prestasi: [], media: [], dropdowns: { assignedTo: [], format: [], platform: [] } };
         this.filteredData = { tasks: [], prestasi: [], media: [] };
         this.userName = sessionStorage.getItem('himagro_user') || null;
         this.init();
