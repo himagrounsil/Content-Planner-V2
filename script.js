@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbyFR1d3aWvTXi2G6hapruNLu9a4SHUmi3Yw6K03BY1w3IRQIj3LPqNTQ2tdY7q-GFnk/exec'
+    API_URL: 'https://script.google.com/macros/s/AKfycbwcyLzNi6zfz1qWnsuo8Lvo7sjuN1R74VBZiopbD2efPeHk7sDIpyFv3MuCxOdzQ7b1/exec'
 };
 
 class AppManager {
@@ -120,11 +120,9 @@ class AppManager {
             const result = await this.callAPI('getAllData');
             if (result.success) {
                 // --- VERSION CHECK: Deteksi Update Fitur/UI ---
-                const APP_VERSION = '1.2.0';
-                if (result.version && result.version !== APP_VERSION) {
-                    this.showToast('🚀 Versi Baru Tersedia! Klik untuk Update Fitur.', 'info', () => {
-                        location.reload(true);
-                    });
+                const APP_VERSION = '1.2.2';
+                if (result.version && result.version !== APP_VERSION && !document.getElementById('updateBanner')) {
+                    this.showUpdateBanner();
                 }
 
                 // --- DATA SYNC: Deteksi Perubahan Isi Spreadsheet (Task & Dropdown) ---
@@ -153,16 +151,13 @@ class AppManager {
         }
     }
 
-    async callAPI(action, params = {}) {
-        const query = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
-        const url = `${CONFIG.API_URL}?action=${action}${query ? '&' + query : ''}&_cache=${Date.now()}`;
-
+    // Satu request JSONP dengan timeout
+    _jsonpRequest(url, callbackName) {
         return new Promise((resolve, reject) => {
-            const callbackName = 'jsonp_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
             const timeout = setTimeout(() => {
                 cleanup();
-                reject(new Error('Koneksi timeout (30s)'));
-            }, 30000);
+                reject(new Error('timeout'));
+            }, 45000); // 45 detik per attempt
 
             const cleanup = () => {
                 clearTimeout(timeout);
@@ -178,18 +173,43 @@ class AppManager {
 
             const script = document.createElement('script');
             script.id = callbackName;
-            script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + callbackName;
+            script.src = url + '&callback=' + callbackName;
             script.onerror = () => {
                 cleanup();
-                // Fallback attempt for non-JSONP if it's a mutation
-                if (action !== 'getAllData') {
-                    fetch(url, { mode: 'no-cors' }).then(() => resolve({ success: true, fallback: true }));
-                } else {
-                    reject(new Error('Gagal memuat script API'));
-                }
+                reject(new Error('script_error'));
             };
             document.body.appendChild(script);
         });
+    }
+
+    async callAPI(action, params = {}, retries = 3) {
+        const query = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+        const baseUrl = `${CONFIG.API_URL}?action=${action}${query ? '&' + query : ''}`;
+
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            const url = baseUrl + `&_cache=${Date.now()}`;
+            const callbackName = 'jsonp_' + Date.now() + '_' + Math.floor(Math.random() * 99999);
+            try {
+                const result = await this._jsonpRequest(url, callbackName);
+                return result;
+            } catch (err) {
+                const isLastAttempt = attempt === retries;
+                if (isLastAttempt) {
+                    // Fallback no-cors untuk mutasi
+                    if (action !== 'getAllData') {
+                        try {
+                            await fetch(baseUrl, { mode: 'no-cors' });
+                            return { success: true, fallback: true };
+                        } catch (e) { }
+                    }
+                    throw new Error(`Gagal setelah ${retries}x percobaan`);
+                }
+                // Tunggu sebelum retry: 2s, 4s, 8s...
+                const delay = Math.pow(2, attempt) * 1000;
+                console.warn(`API attempt ${attempt} failed, retrying in ${delay}ms...`);
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
     }
 
     populateDropdowns() {
@@ -323,12 +343,8 @@ class AppManager {
             });
         }
 
-        // --- SORT: Closest deadline first ---
-        tasks.sort((a, b) => {
-            const da = new Date(a.dueDate), db = new Date(b.dueDate);
-            if (isNaN(da.getTime()) || isNaN(db.getTime())) return 0;
-            return da - db;
-        });
+        // --- SORT: Urutan nomor task (urutan ditambahkan) ---
+        tasks.sort((a, b) => parseInt(a.no) - parseInt(b.no));
 
         tasks.forEach(t => cont.appendChild(this.createTaskCard(t)));
     }
@@ -368,10 +384,24 @@ class AppManager {
         const first = new Date(y, m, 1).getDay(), last = new Date(y, m + 1, 0).getDate();
         for (let i = 0; i < first; i++) grid.innerHTML += `<div class="calendar-cell"></div>`;
 
+        // Ambil filter aktif agar kalender sinkron dgn filter list
+        const platform = document.getElementById('filterPlatform')?.value || '';
+        const assignee = document.getElementById('filterAssignee')?.value || '';
+        const format = document.getElementById('filterFormat')?.value || '';
+        const searchTerm = document.getElementById('searchBox')?.value.toLowerCase() || '';
+
+        const allTasks = this.data.tasks.filter(t => {
+            return (!platform || t.platform === platform) &&
+                (!assignee || t.assignedTo === assignee) &&
+                (!format || t.format === format) &&
+                (t.task.toLowerCase().includes(searchTerm) || t.assignedTo.toLowerCase().includes(searchTerm));
+        });
+
         const nowStr = new Date().toISOString().split('T')[0];
         for (let d = 1; d <= last; d++) {
             const dStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const tasks = this.filteredData.tasks.filter(t => t.dueDate === dStr);
+            // Cocokkan tanggal dengan lebih toleran (hanya 10 karakter pertama)
+            const tasks = allTasks.filter(t => t.dueDate && t.dueDate.substring(0, 10) === dStr);
             grid.innerHTML += `
                 <div class="calendar-cell ${dStr === nowStr ? 'today' : ''}">
                     <div class="calendar-date">${d}</div>
@@ -536,6 +566,30 @@ class AppManager {
         document.getElementById('loadingSpinner').style.display = isInitial ? 'none' : 'block';
     }
     hideLoading() { document.getElementById('loadingStateContent').style.display = 'none'; }
+
+    showUpdateBanner() {
+        const banner = document.createElement('div');
+        banner.id = 'updateBanner';
+        banner.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white; padding: 12px 20px;
+            display: flex; align-items: center; justify-content: center; gap: 16px;
+            font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        `;
+        banner.innerHTML = `
+            <span>🚀 Pembaruan Aplikasi Tersedia! Update untuk mendapatkan fitur & perbaikan terbaru.</span>
+            <button onclick="location.reload(true)" style="
+                background: white; color: #d97706; border: none; border-radius: 8px;
+                padding: 8px 18px; font-weight: 700; cursor: pointer; font-size: 0.9rem;
+                white-space: nowrap; transition: transform 0.2s;
+            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                Update Sekarang ↻
+            </button>
+        `;
+        document.body.prepend(banner);
+    }
     showToast(m, t, callback) {
         const c = document.getElementById('toastContainer');
         const d = document.createElement('div');
@@ -592,14 +646,35 @@ function updateBulkUI() {
     items.innerHTML = bulkArray.map((t, i) => `<div class="bulk-item">${t.task} <button onclick="bulkArray.splice(${i},1);updateBulkUI()">X</button></div>`).join('');
 }
 window.saveBulkTasks = async () => {
-    app.showLoading('Saving bulk...');
-    try {
-        await Promise.all(bulkArray.map(t => app.callAPI('createTask', { data: JSON.stringify(t) })));
-        app.showToast('Bulk success!', 'success');
-        closeBulkModal();
-        await app.loadAllData();
-    } catch (e) { app.showToast('Bulk failed', 'error'); }
-    finally { app.hideLoading(); }
+    const total = bulkArray.length;
+    if (!total) return;
+
+    app.showLoading(`Menyimpan 0/${total}...`);
+    let success = 0, failed = 0;
+
+    // Kirim SATU PER SATU agar tidak berebut kunci server (LockService)
+    for (let i = 0; i < total; i++) {
+        const t = bulkArray[i];
+        try {
+            document.getElementById('loadingTitle').textContent = `Menyimpan ${i + 1}/${total}...`;
+            const res = await app.callAPI('createTask', { data: JSON.stringify(t) });
+            if (res && res.success) { success++; } else { failed++; }
+        } catch (e) {
+            failed++;
+        }
+        // Jeda kecil 300ms agar server tidak kelebihan beban
+        if (i < total - 1) await new Promise(r => setTimeout(r, 300));
+    }
+
+    app.hideLoading();
+    if (failed === 0) {
+        app.showToast(`✅ ${success} task berhasil disimpan!`, 'success');
+    } else {
+        app.showToast(`⚠️ ${success} berhasil, ${failed} gagal.`, 'error');
+    }
+    closeBulkModal();
+    bulkArray = [];
+    await app.loadAllData();
 };
 
 let selectedTasks = new Set();

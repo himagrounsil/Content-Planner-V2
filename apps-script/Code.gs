@@ -177,51 +177,55 @@ function getTasksData(openedSs) {
 
 function createTaskData(taskData) {
   const cfg = CONFIG.CONTENT_PLANNER;
-  const sheet = SpreadsheetApp.openById(cfg.ID).getSheetByName(cfg.SHEET_NAME);
+  const ss = SpreadsheetApp.openById(cfg.ID);
+  const sheet = ss.getSheetByName(cfg.SHEET_NAME);
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
     const lastRow = sheet.getLastRow();
     let lastNumber = 0;
     let lastNumberRow = cfg.DATA_START_ROW - 1;
-    
+
     if (lastRow >= cfg.DATA_START_ROW) {
-      for (let row = lastRow; row >= cfg.DATA_START_ROW; row--) {
-        const val = sheet.getRange(row, 1).getValue();
-        if (!isNaN(val) && val > 0) { lastNumber = val; lastNumberRow = row; break; }
+      // BATCH READ kolom nomor - jauh lebih cepat dari looping per sel
+      const noValues = sheet.getRange(cfg.DATA_START_ROW, 1, lastRow - cfg.DATA_START_ROW + 1, 1).getValues().flat();
+      for (let i = noValues.length - 1; i >= 0; i--) {
+        const val = parseInt(noValues[i]);
+        if (!isNaN(val) && val > 0) { lastNumber = val; lastNumberRow = cfg.DATA_START_ROW + i; break; }
       }
     }
-    
+
     const writeRow = lastNumberRow + 1;
     const newNo = lastNumber + 1;
-    
-    // 1. Tulis Data Dasar satu per satu agar lebih aman
-    sheet.getRange(writeRow, 1).setValue(newNo);
-    sheet.getRange(writeRow, 2).setValue(taskData.task || '');
-    sheet.getRange(writeRow, 3).setValue(taskData.platform || '');
-    sheet.getRange(writeRow, 4).setValue(taskData.format || '');
-    sheet.getRange(writeRow, 5).setValue(taskData.assignedTo || '');
-    
-    // 2. Berikan penanganan khusus untuk Tanggal
+
+    let dueDate = '';
     if (taskData.dueDate) {
       try {
         const d = new Date(taskData.dueDate.replace(/-/g, '/') + ' 00:00:00');
-        if (!isNaN(d.getTime())) {
-          sheet.getRange(writeRow, 6).setValue(d).setNumberFormat('yyyy-mm-dd');
-          sheet.getRange(writeRow, 7).setFormula(`=F${writeRow}-TODAY()`);
-        }
-      } catch(e) {
-        sheet.getRange(writeRow, 6).setValue(taskData.dueDate);
-      }
+        dueDate = isNaN(d.getTime()) ? taskData.dueDate : d;
+      } catch(e) { dueDate = taskData.dueDate; }
     }
-    
-    // 3. Tulis sisa kolom
-    sheet.getRange(writeRow, 8).setValue(taskData.inProgress || 'Not Done');
-    sheet.getRange(writeRow, 9).setValue(taskData.reference || '');
-    sheet.getRange(writeRow, 10).setValue(taskData.result || '');
-    sheet.getRange(writeRow, 11).setValue(taskData.notes || '');
-    
-    SpreadsheetApp.flush(); // Paksa simpan sekarang juga
+
+    // BATCH WRITE: Satu operasi untuk semua kolom
+    sheet.getRange(writeRow, 1, 1, 11).setValues([[
+      newNo,
+      taskData.task || '',
+      taskData.platform || '',
+      taskData.format || '',
+      taskData.assignedTo || '',
+      dueDate || '',
+      dueDate ? '=F' + writeRow + '-TODAY()' : '',
+      taskData.inProgress || 'Not Done',
+      taskData.reference || '',
+      taskData.result || '',
+      taskData.notes || ''
+    ]]);
+
+    if (dueDate instanceof Date) {
+      sheet.getRange(writeRow, 6).setNumberFormat('yyyy-mm-dd');
+    }
+
+    SpreadsheetApp.flush();
     return { success: true, no: newNo };
   } catch(e) {
     return { success: false, error: e.message };
@@ -232,37 +236,51 @@ function createTaskData(taskData) {
 
 function updateTaskData(id, taskData) {
   const cfg = CONFIG.CONTENT_PLANNER;
-  const sheet = SpreadsheetApp.openById(cfg.ID).getSheetByName(cfg.SHEET_NAME);
+  const ss = SpreadsheetApp.openById(cfg.ID);
+  const sheet = ss.getSheetByName(cfg.SHEET_NAME);
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    lock.waitLock(30000);
     const lastRow = sheet.getLastRow();
-    for (let row = cfg.DATA_START_ROW; row <= lastRow; row++) {
-      if (sheet.getRange(row, 1).getValue() == id) {
-        if (taskData.task) sheet.getRange(row, 2).setValue(taskData.task);
-        if (taskData.platform) sheet.getRange(row, 3).setValue(taskData.platform);
-        if (taskData.format) sheet.getRange(row, 4).setValue(taskData.format);
-        if (taskData.assignedTo) sheet.getRange(row, 5).setValue(taskData.assignedTo);
-        
-        if (taskData.dueDate) {
-          const d = new Date(taskData.dueDate.replace(/-/g, '/') + ' 00:00:00');
-          if (!isNaN(d.getTime())) {
-            sheet.getRange(row, 6).setValue(d).setNumberFormat('yyyy-mm-dd');
-          } else {
-            sheet.getRange(row, 6).setValue(taskData.dueDate);
-          }
-        }
-        
-        if (taskData.inProgress) sheet.getRange(row, 8).setValue(taskData.inProgress);
-        if (taskData.reference !== undefined) sheet.getRange(row, 9).setValue(taskData.reference);
-        if (taskData.result !== undefined) sheet.getRange(row, 10).setValue(taskData.result);
-        if (taskData.notes !== undefined) sheet.getRange(row, 11).setValue(taskData.notes);
-        
-        SpreadsheetApp.flush();
-        return { success: true };
-      }
+    if (lastRow < cfg.DATA_START_ROW) return { success: false, error: 'No data' };
+
+    // BATCH READ: Ambil semua ID sekaligus
+    const ids = sheet.getRange(cfg.DATA_START_ROW, 1, lastRow - cfg.DATA_START_ROW + 1, 1).getValues().flat();
+    const rowIdx = ids.findIndex(v => String(v) === String(id));
+    if (rowIdx === -1) return { success: false, error: 'ID ' + id + ' tidak ditemukan' };
+
+    const targetRow = cfg.DATA_START_ROW + rowIdx;
+    const existing = sheet.getRange(targetRow, 1, 1, 11).getValues()[0];
+
+    let dueDate = existing[5];
+    if (taskData.dueDate) {
+      try {
+        const d = new Date(taskData.dueDate.replace(/-/g, '/') + ' 00:00:00');
+        dueDate = isNaN(d.getTime()) ? taskData.dueDate : d;
+      } catch(e) { dueDate = taskData.dueDate; }
     }
-    return { success: false, error: 'ID tidak ditemukan' };
+
+    // BATCH WRITE
+    sheet.getRange(targetRow, 1, 1, 11).setValues([[
+      existing[0],
+      taskData.task !== undefined ? taskData.task : existing[1],
+      taskData.platform !== undefined ? taskData.platform : existing[2],
+      taskData.format !== undefined ? taskData.format : existing[3],
+      taskData.assignedTo !== undefined ? taskData.assignedTo : existing[4],
+      dueDate || '',
+      '=F' + targetRow + '-TODAY()',
+      taskData.inProgress !== undefined ? taskData.inProgress : existing[7],
+      taskData.reference !== undefined ? taskData.reference : existing[8],
+      taskData.result !== undefined ? taskData.result : existing[9],
+      taskData.notes !== undefined ? taskData.notes : existing[10]
+    ]]);
+
+    if (dueDate instanceof Date) {
+      sheet.getRange(targetRow, 6).setNumberFormat('yyyy-mm-dd');
+    }
+
+    SpreadsheetApp.flush();
+    return { success: true };
   } catch(e) {
     return { success: false, error: e.message };
   } finally {
