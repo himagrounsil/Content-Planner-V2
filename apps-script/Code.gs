@@ -20,7 +20,7 @@ const CONFIG = {
     ID: '1e_FaJw2Csq67PmifCf0ajfWXZHhkSEPO8u0LnquZlqc', // ID Spreadsheet Media Partner
     SHEET_NAME: 'Form Responses 1'
   },
-  VERSION: '1.2.0' // Versi Aplikasi
+  VERSION: '1.3.0' // Versi Aplikasi
 };
 
 // ==================== WEB APP ENTRY POINT ====================

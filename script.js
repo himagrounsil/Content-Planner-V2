@@ -121,8 +121,9 @@ class AppManager {
             if (result.success) {
                 // --- VERSION CHECK: Deteksi Update Fitur/UI ---
                 const APP_VERSION = '1.3.0';
-                if (result.version && result.version !== APP_VERSION && !document.getElementById('updateBanner')) {
-                    this.showUpdateBanner();
+                const dismissedVersion = sessionStorage.getItem('himagro_update_dismissed');
+                if (result.version && result.version !== APP_VERSION && result.version !== dismissedVersion && !document.getElementById('updateBanner')) {
+                    this.showUpdateBanner(result.version);
                 }
 
                 // --- DATA SYNC: Deteksi Perubahan Isi Spreadsheet (Task & Dropdown) ---
@@ -241,8 +242,9 @@ class AppManager {
     async logActivity(action, targetId, details) {
         try {
             const logData = { user: this.userName, action, targetId, details };
-            await fetch(`${CONFIG.API_URL}?action=logActivity&data=${encodeURIComponent(JSON.stringify(logData))}`, { mode: 'no-cors' });
-        } catch (e) { }
+            // Gunakan JSONP agar data benar-benar terkirim (no-cors tidak bisa)
+            await this.callAPI('logActivity', { data: JSON.stringify(logData) });
+        } catch (e) { /* log gagal tidak perlu crash app */ }
     }
 
     async clearCache() {
@@ -350,23 +352,34 @@ class AppManager {
     }
 
     createTaskCard(t) {
+        const days = parseInt(t.dateLeft);
+        const isUrgent = t.inProgress !== 'Done' && !isNaN(days) && days <= 3;
+
+        // Warna background kartu berdasarkan status (hanya On Progress & Ready To Upload)
+        let cardBg = '';
+        if (t.inProgress === 'On Progress') cardBg = 'background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.3);';
+        if (t.inProgress === 'Ready To Upload') cardBg = 'background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.3);';
+
         const div = document.createElement('div');
         div.className = 'grid-card';
+        div.style.cssText = cardBg;
+        if (isUrgent) div.style.borderLeft = '3px solid #ef4444';
         div.innerHTML = `
             <div class="grid-card-header">
                 <input type="checkbox" class="task-checkbox" data-task-id="${t.no}" onclick="event.stopPropagation(); toggleTaskSelection(${t.no})">
                 <h3 style="flex: 1;">${t.task}</h3>
-                <select class="status-dropdown" onchange="app.quickUpdateStatus(${t.no}, this.value)" onclick="event.stopPropagation()">
-                    <option value="Not Done" ${t.inProgress === 'Not Done' ? 'selected' : ''}>Not Done</option>
-                    <option value="On Progress" ${t.inProgress === 'On Progress' ? 'selected' : ''}>In Progress</option>
-                    <option value="Ready To Upload" ${t.inProgress === 'Ready To Upload' ? 'selected' : ''}>Ready</option>
-                    <option value="Done" ${t.inProgress === 'Done' ? 'selected' : ''}>Selesai</option>
-                </select>
             </div>
+            ${isUrgent ? '<span style="display:inline-block;padding:3px 8px;border-radius:100px;font-size:0.7rem;font-weight:700;color:#ef4444;background:rgba(239,68,68,0.1);margin-bottom:6px;">⚠ URGENT</span>' : ''}
             <div class="grid-info-row"><i class="fas fa-user"></i> ${t.assignedTo}</div>
-            <div class="grid-info-row"><i class="fas fa-calendar"></i> ${t.dueDate}</div>
+            <div class="grid-info-row"><i class="fas fa-calendar"></i> ${t.dueDate}${t.inProgress !== 'Done' && !isNaN(days) ? ` <span style="opacity:0.6;font-size:0.8em">(${days} hari lagi)</span>` : ''}</div>
             <div class="grid-info-row"><i class="fas fa-bullseye"></i> ${t.platform} - ${t.format}</div>
-            <div style="margin-top:auto; display:flex; gap:10px; justify-content:flex-end;">
+            <div style="margin-top:auto; display:flex; gap:6px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+                <select class="status-dropdown" onchange="app.quickUpdateStatus(${t.no}, this.value)" onclick="event.stopPropagation()" style="flex:1;">
+                    <option value="Not Done" ${t.inProgress === 'Not Done' ? 'selected' : ''}>Not Done</option>
+                    <option value="On Progress" ${t.inProgress === 'On Progress' ? 'selected' : ''}>On Progress</option>
+                    <option value="Ready To Upload" ${t.inProgress === 'Ready To Upload' ? 'selected' : ''}>Ready To Upload</option>
+                    <option value="Done" ${t.inProgress === 'Done' ? 'selected' : ''}>Done</option>
+                </select>
                 <button class="btn-text btn-edit" onclick="event.stopPropagation(); app.editTask(${t.no})">Edit</button>
                 <button class="btn-text btn-delete" onclick="event.stopPropagation(); app.deleteTask(${t.no})">Hapus</button>
             </div>
@@ -483,7 +496,6 @@ class AppManager {
         if (!data.assignedTo || !data.dueDate) return this.showToast('Data belum lengkap!', 'error');
 
         this.showLoading('Menyimpan...');
-        // Optimistic UI
         if (id) {
             const t = this.data.tasks.find(x => x.no == id);
             if (t) Object.assign(t, data);
@@ -495,6 +507,7 @@ class AppManager {
             const res = await this.callAPI(id ? 'updateTask' : 'createTask', { id: id || '', data: JSON.stringify(data) });
             if (res.success) {
                 this.showToast('Berhasil disimpan', 'success');
+                this.logActivity(id ? 'UPDATE' : 'CREATE', id || res.no, data.task);
                 await this.loadAllData();
             } else throw new Error(res.error);
         } catch (err) {
@@ -519,6 +532,7 @@ class AppManager {
             this.applyFilters();
             try {
                 await this.callAPI('deleteTask', { id });
+                this.logActivity('DELETE', id, 'Task dihapus');
                 this.showToast('Terhapus', 'success');
                 setTimeout(() => this.loadAllData(), 2000);
             } catch (e) { this.showToast('Gagal hapus', 'error'); await this.loadAllData(); }
@@ -567,7 +581,7 @@ class AppManager {
     }
     hideLoading() { document.getElementById('loadingStateContent').style.display = 'none'; }
 
-    showUpdateBanner() {
+    showUpdateBanner(serverVersion) {
         const banner = document.createElement('div');
         banner.id = 'updateBanner';
         banner.style.cssText = `
@@ -580,15 +594,29 @@ class AppManager {
         `;
         banner.innerHTML = `
             <span>🚀 Pembaruan Aplikasi Tersedia! Update untuk mendapatkan fitur & perbaikan terbaru.</span>
-            <button onclick="location.reload(true)" style="
+            <button id="updateNowBtn" style="
                 background: white; color: #d97706; border: none; border-radius: 8px;
                 padding: 8px 18px; font-weight: 700; cursor: pointer; font-size: 0.9rem;
                 white-space: nowrap; transition: transform 0.2s;
             " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                 Update Sekarang ↻
             </button>
+            <button id="dismissUpdateBtn" style="
+                background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.5);
+                border-radius: 8px; padding: 8px 14px; font-weight: 600; cursor: pointer; font-size: 0.85rem;
+            ">Nanti</button>
         `;
         document.body.prepend(banner);
+
+        document.getElementById('updateNowBtn').onclick = () => {
+            // Reload paksa untuk ambil file terbaru dari server
+            location.reload(true);
+        };
+        document.getElementById('dismissUpdateBtn').onclick = () => {
+            // Simpan versi yang sudah dilihat agar tidak muncul lagi sesi ini
+            sessionStorage.setItem('himagro_update_dismissed', serverVersion);
+            banner.remove();
+        };
     }
     showToast(m, t, callback) {
         const c = document.getElementById('toastContainer');
@@ -632,8 +660,13 @@ window.closeDetailModal = () => document.getElementById('detailModal').style.dis
 let bulkArray = [];
 window.openBulkModal = () => { document.getElementById('bulkModal').style.display = 'flex'; bulkArray = []; updateBulkUI(); };
 window.closeBulkModal = () => document.getElementById('bulkModal').style.display = 'none';
+const BULK_LIMIT = 20; // Maksimal task per batch
 window.addTaskToBulkList = (e) => {
     e.preventDefault();
+    if (bulkArray.length >= BULK_LIMIT) {
+        app.showToast(`⚠️ Maksimal ${BULK_LIMIT} task per batch!`, 'error');
+        return;
+    }
     bulkArray.push(Object.fromEntries(new FormData(e.target).entries()));
     updateBulkUI();
     e.target.reset();
@@ -641,37 +674,70 @@ window.addTaskToBulkList = (e) => {
 function updateBulkUI() {
     const list = document.getElementById('bulkTaskList'), items = document.getElementById('bulkTaskItems');
     list.style.display = bulkArray.length ? 'block' : 'none';
-    document.getElementById('bulkCount').textContent = bulkArray.length;
+    const countEl = document.getElementById('bulkCount');
+    countEl.textContent = `${bulkArray.length}/${BULK_LIMIT}`;
+    countEl.style.color = bulkArray.length >= BULK_LIMIT ? '#ef4444' : 'inherit';
     document.getElementById('saveBulkBtn').disabled = !bulkArray.length;
+    document.getElementById('addBulkBtn').disabled = bulkArray.length >= BULK_LIMIT;
     items.innerHTML = bulkArray.map((t, i) => `<div class="bulk-item">${t.task} <button onclick="bulkArray.splice(${i},1);updateBulkUI()">X</button></div>`).join('');
 }
 window.saveBulkTasks = async () => {
     const total = bulkArray.length;
     if (!total) return;
 
-    app.showLoading(`Menyimpan 0/${total}...`);
-    let success = 0, failed = 0;
+    // Cegah user menutup tab saat proses berlangsung
+    const beforeUnloadHandler = (e) => {
+        e.preventDefault();
+        e.returnValue = 'Proses penyimpanan task masih berlangsung. Yakin ingin keluar?';
+    };
+    window.addEventListener('beforeunload', beforeUnloadHandler);
 
-    // Kirim SATU PER SATU agar tidak berebut kunci server (LockService)
+    // Tampilkan progress bar custom
+    const progressOverlay = document.createElement('div');
+    progressOverlay.id = 'bulkProgressOverlay';
+    progressOverlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;`;
+    progressOverlay.innerHTML = `
+        <div style="background:#065f46;border-radius:16px;padding:32px;min-width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+            <div style="font-size:2rem;margin-bottom:12px">📋</div>
+            <p style="font-weight:700;font-size:1.1rem;margin-bottom:4px;color:white">Menyimpan Bulk Task</p>
+            <p style="color:#fbbf24;font-size:0.8rem;margin-bottom:12px;">⚠️ Jangan tutup atau tinggalkan aplikasi</p>
+            <p id="bulkProgressText" style="color:#a7f3d0;margin-bottom:20px;font-size:0.9rem">Mempersiapkan...</p>
+            <div style="background:rgba(0,0,0,0.3);border-radius:100px;height:12px;overflow:hidden">
+                <div id="bulkProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:100px;transition:width 0.3s ease"></div>
+            </div>
+            <p id="bulkProgressCount" style="color:#a7f3d0;margin-top:12px;font-size:0.85rem">0 / ${total}</p>
+        </div>`;
+    document.body.appendChild(progressOverlay);
+
+    let success = 0, failed = 0;
     for (let i = 0; i < total; i++) {
-        const t = bulkArray[i];
+        const pct = Math.round((i / total) * 100);
+        document.getElementById('bulkProgressBar').style.width = pct + '%';
+        document.getElementById('bulkProgressText').textContent = `Menyimpan task ${i + 1} dari ${total}...`;
+        document.getElementById('bulkProgressCount').textContent = `${i} / ${total}`;
+
         try {
-            document.getElementById('loadingTitle').textContent = `Menyimpan ${i + 1}/${total}...`;
-            const res = await app.callAPI('createTask', { data: JSON.stringify(t) });
+            const res = await app.callAPI('createTask', { data: JSON.stringify(bulkArray[i]) });
             if (res && res.success) { success++; } else { failed++; }
-        } catch (e) {
-            failed++;
-        }
-        // Jeda kecil 300ms agar server tidak kelebihan beban
+        } catch (e) { failed++; }
+
         if (i < total - 1) await new Promise(r => setTimeout(r, 300));
     }
 
-    app.hideLoading();
+    // Selesai — lepas proteksi beforeunload
+    window.removeEventListener('beforeunload', beforeUnloadHandler);
+    document.getElementById('bulkProgressBar').style.width = '100%';
+    document.getElementById('bulkProgressText').textContent = '✅ Selesai!';
+    document.getElementById('bulkProgressCount').textContent = `${success} berhasil, ${failed} gagal`;
+    await new Promise(r => setTimeout(r, 1500));
+    progressOverlay.remove();
+
     if (failed === 0) {
         app.showToast(`✅ ${success} task berhasil disimpan!`, 'success');
     } else {
         app.showToast(`⚠️ ${success} berhasil, ${failed} gagal.`, 'error');
     }
+    app.logActivity('BULK_CREATE', '-', `${success} task ditambahkan`);
     closeBulkModal();
     bulkArray = [];
     await app.loadAllData();
