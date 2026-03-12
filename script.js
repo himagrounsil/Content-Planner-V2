@@ -120,7 +120,7 @@ class AppManager {
             const result = await this.callAPI('getAllData');
             if (result.success) {
                 // --- VERSION CHECK: Deteksi Update Fitur/UI ---
-                const APP_VERSION = '1.2.2';
+                const APP_VERSION = '1.3.0';
                 if (result.version && result.version !== APP_VERSION && !document.getElementById('updateBanner')) {
                     this.showUpdateBanner();
                 }
