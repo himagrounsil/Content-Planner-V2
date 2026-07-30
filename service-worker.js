@@ -1,8 +1,7 @@
-const CACHE_NAME = 'himagro-cms-v8-cache';
+const CACHE_NAME = 'himagro-cms-v11-cache';
 const STATIC_ASSETS = [
     'Logo/Unsil.png',
     'Logo/Himagro.png',
-    'Logo/Kabinet.png',
     'Logo/BluSpeed.png',
     'Logo/Berdampak.png',
     'Logo/Logo Kominfo.png',

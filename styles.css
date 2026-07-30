@@ -1786,12 +1786,16 @@ textarea:focus {
 }
 
 .sintesys-univ-title {
-    font-size: 1.6rem;
+    font-size: clamp(1.05rem, 1.7vw, 1.45rem);
     font-weight: 800;
     color: #0f172a;
     margin: 16px 0 0 0;
     text-align: center;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sintesys-card {

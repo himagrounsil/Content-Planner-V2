@@ -786,7 +786,9 @@ class AppManager {
                     <button class="btn btn-primary" style="flex:1; font-size:0.75rem" onclick="event.stopPropagation(); app.automateTask(${JSON.stringify(item).replace(/"/g, '&quot;')})" ${created ? 'disabled' : ''}>
                         ${created ? 'Ditambahkan' : 'Auto Plan'}
                     </button>
-                    <a href="https://wa.me/${item.wa?.replace(/\D/g, '')}" target="_blank" class="btn" style="background:#25D366; width:40px;"><i class="fab fa-whatsapp"></i></a>
+                    <a href="https://wa.me/${item.wa?.replace(/\D/g, '')}" target="_blank" onclick="event.stopPropagation();" title="Hubungi via WhatsApp" style="background: #25D366; color: #ffffff !important; width: 42px; height: 38px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; flex-shrink: 0; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.3); transition: all 0.2s ease;">
+                        <i class="fab fa-whatsapp" style="color: #ffffff !important; font-size: 1.25rem;"></i>
+                    </a>
                 </div>`;
             div.onclick = () => this.showMediaDetail(item);
             grid.appendChild(div);
