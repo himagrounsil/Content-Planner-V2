@@ -1,5 +1,5 @@
 const CONFIG = {
-    API_URL: 'https://script.google.com/macros/s/AKfycbwcyLzNi6zfz1qWnsuo8Lvo7sjuN1R74VBZiopbD2efPeHk7sDIpyFv3MuCxOdzQ7b1/exec'
+    API_URL: 'https://script.google.com/macros/s/AKfycby7Ae3M3Pn-NPnY4CaEjpTJ4yT1RnlhZYn0NGwNjEDf87Q5aPwZoVwwNrmW1zRJICjf_g/exec'
 };
 
 class AppManager {
@@ -10,10 +10,23 @@ class AppManager {
         this.data = { tasks: [], prestasi: [], media: [], dropdowns: { assignedTo: [], format: [], platform: [] } };
         this.filteredData = { tasks: [], prestasi: [], media: [] };
         this.userName = sessionStorage.getItem('himagro_user') || null;
+
+        // Admin Mode: Pengurus Database (Sheet 'Database' structure)
+        const savedPengurus = localStorage.getItem('himagro_pengurus_database');
+        this.pengurusList = savedPengurus ? JSON.parse(savedPengurus) : [
+            { subDiv: 'Design Creator', format: 'Story', email: '245001111135@student.unsil.ac.id, nzaqsha05@gmail.com, mtripujiutami03@gmail.com', role: 'Creator' },
+            { subDiv: 'Design Creator', format: 'Feeds', email: '245001111135@student.unsil.ac.id, nzaqsha05@gmail.com, mtripujiutami03@gmail.com', role: 'Creator' },
+            { subDiv: 'Room Of Documentary', format: 'Video', email: 'tasyameutya@gmail.com', role: 'Creator' },
+            { subDiv: 'Content Writer', format: 'Article', email: 'ayunidwikurnia06@gmail.com', role: 'Creator' },
+            { subDiv: 'Relation And Archive', format: '', email: '245001111111@student.unsil.ac.id', role: 'Archive' },
+            { subDiv: 'Social Media', format: '', email: '245001111111@student.unsil.ac.id', role: 'Sosmed' }
+        ];
+
         this.init();
     }
 
     async init() {
+        this.populatePengurusDataList();
         if (!this.userName) {
             this.showLoginModal();
             return;
@@ -39,7 +52,12 @@ class AppManager {
     }
 
     showLoginModal() {
-        document.getElementById('loginModal').style.display = 'flex';
+        this.populatePengurusDataList();
+        const modal = document.getElementById('loginModal');
+        modal.style.display = 'flex';
+        requestAnimationFrame(() => {
+            modal.classList.add('active');
+        });
         this.hideLoading();
     }
 
@@ -49,7 +67,11 @@ class AppManager {
         if (name) {
             this.userName = name;
             sessionStorage.setItem('himagro_user', this.userName);
-            document.getElementById('loginModal').style.display = 'none';
+            const modal = document.getElementById('loginModal');
+            modal.classList.remove('active');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 400);
             this.showLoading();
             this.proceedWithInit();
         }
@@ -129,6 +151,12 @@ class AppManager {
                 // --- DATA SYNC: Deteksi Perubahan Isi Spreadsheet (Task & Dropdown) ---
                 const oldHash = JSON.stringify({ t: this.data.tasks, d: this.data.dropdowns });
                 const newHash = JSON.stringify({ t: result.tasks, d: result.dropdowns });
+
+                if (result.database && Array.isArray(result.database) && result.database.length > 0) {
+                    this.pengurusList = result.database;
+                    localStorage.setItem('himagro_pengurus_database', JSON.stringify(this.pengurusList));
+                    this.populatePengurusDataList();
+                }
 
                 if (oldHash !== newHash || isInitial) {
                     this.data = result;
@@ -214,8 +242,15 @@ class AppManager {
     }
 
     populateDropdowns() {
-        const { assignedTo, format, platform } = this.data.dropdowns;
-        if (!assignedTo || !format) return;
+        let { assignedTo, format, platform } = this.data.dropdowns;
+        if (!assignedTo) assignedTo = [];
+        if (!format) format = [];
+
+        // Merge Pengurus list into assignedTo dropdown list
+        if (this.pengurusList && this.pengurusList.length) {
+            const pengurusNames = this.pengurusList.map(p => p.name);
+            assignedTo = [...new Set([...assignedTo, ...pengurusNames])];
+        }
 
         const setOptions = (id, options, defaultText) => {
             const el = document.getElementById(id);
@@ -236,6 +271,292 @@ class AppManager {
             document.querySelectorAll('select[name="platform"]').forEach(s => {
                 s.innerHTML = platform.map(o => `<option value="${o}">${o}</option>`).join('');
             });
+        }
+    }
+
+    populatePengurusDataList() {
+        const datalist = document.getElementById('pengurusDataList');
+        if (datalist && this.pengurusList) {
+            // Unique emails and subDiv entries for login suggestions
+            const suggestions = new Set();
+            this.pengurusList.forEach(p => {
+                if (p.subDiv) suggestions.add(`${p.subDiv} (${p.role})`);
+                if (p.email) {
+                    p.email.split(',').forEach(e => {
+                        const trimmed = e.trim();
+                        if (trimmed) suggestions.add(trimmed);
+                    });
+                }
+            });
+            datalist.innerHTML = Array.from(suggestions).map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+    }
+
+    onAdminKategoriChange() {
+        const kat = document.getElementById('adminKategori')?.value;
+        const subSelect = document.getElementById('adminSubKategori');
+        if (!subSelect) return;
+
+        const CATEGORY_MAP = {
+            'BPH': ['Ketua Himpunan', 'Wakil Ketua Himpunan', 'Sekretaris Umum 1', 'Sekretaris Umum 2', 'Bendahara Umum 1', 'Bendahara Umum 2', 'Administrator'],
+            'Kominfo': ['Kepala Departemen', 'Sekretaris Departemen', 'Staf Content Creator', 'Staf Graphic Designer', 'Staf Video Editor', 'Staf Social Media Officer', 'Staf Public Relations'],
+            'KWU': ['Kepala Departemen', 'Sekretaris Departemen', 'Staf Product Manager', 'Staf Marketing', 'Staf Finance'],
+            'PSDA': ['Kepala Departemen', 'Sekretaris Departemen', 'Staf Pengembangan SDM', 'Staf Kaderisasi'],
+            'PPC': ['Kepala Departemen', 'Sekretaris Departemen', 'Staf Penalaran & Keilmuan'],
+            'DP': ['Kepala Departemen', 'Sekretaris Departemen', 'Staf Pengabdian Masyarakat']
+        };
+
+        const subCategories = CATEGORY_MAP[kat] || [];
+        subSelect.innerHTML = `<option value="">-- Pilih Sub Kategori --</option>` +
+            subCategories.map(sub => `<option value="${sub}">${sub}</option>`).join('');
+    }
+
+    openAdminModal() {
+        document.getElementById('adminModeModal').style.display = 'flex';
+        this.renderPengurusList();
+    }
+
+    closeAdminModal() {
+        document.getElementById('adminModeModal').style.display = 'none';
+    }
+
+    async savePengurusData() {
+        const subDivInput = document.getElementById('adminSubDivisi');
+        const formatInput = document.getElementById('adminFormat');
+        const emailInput = document.getElementById('adminEmail');
+        const roleInput = document.getElementById('adminRole');
+
+        const subDiv = subDivInput ? subDivInput.value : '';
+        const format = formatInput ? formatInput.value : '';
+        const email = emailInput ? emailInput.value.trim() : '';
+        const role = roleInput ? roleInput.value : 'Creator';
+
+        if (!subDiv || !email) {
+            this.showToast('Mohon isi Sub Divisi dan Email pengurus!', 'error');
+            return;
+        }
+
+        const newData = { subDiv, format, email, role };
+
+        // 1. Simpan lokal terlebih dahulu
+        this.pengurusList.push(newData);
+        localStorage.setItem('himagro_pengurus_database', JSON.stringify(this.pengurusList));
+        this.populatePengurusDataList();
+        this.populateDropdowns();
+        this.renderPengurusList();
+
+        // 2. Kirim ke API Google Apps Script untuk ditulis ke Spreadsheet ('Database' sheet)
+        this.showLoading('Menyimpan ke Spreadsheet...');
+        try {
+            const res = await this.callAPI('addDatabase', { data: JSON.stringify(newData) });
+            if (res && res.success) {
+                this.showToast(`Entri "${subDiv} (${role})" berhasil disimpan ke Spreadsheet!`, 'success');
+                this.logActivity('ADD_DATABASE_PENGURUS', '-', `${subDiv} - ${role} - ${email}`);
+            } else {
+                this.showToast('Tersimpan di browser, tetapi gagal sync ke Spreadsheet.', 'warning');
+            }
+        } catch (err) {
+            console.error('API Save Database failed:', err);
+            this.showToast('Tersimpan lokal, koneksi backend bermasalah.', 'warning');
+        } finally {
+            this.hideLoading();
+        }
+
+        // Reset form
+        if (subDivInput) subDivInput.value = '';
+        if (formatInput) formatInput.value = '';
+        if (emailInput) emailInput.value = '';
+        if (roleInput) roleInput.value = 'Creator';
+    }
+
+    deletePengurus(index) {
+        if (index >= 0 && index < this.pengurusList.length) {
+            const removed = this.pengurusList[index];
+            this.showConfirmNotification(`Hapus entri database "${removed.subDiv} (${removed.role})"?`, async () => {
+                // 1. Kirim request ke API Apps Script TERLEBIH DAHULU
+                this.showLoading('Menghapus dari Spreadsheet...');
+                try {
+                    const res = await this.callAPI('deleteDatabase', {
+                        index,
+                        data: JSON.stringify({
+                            subDiv: removed.subDiv,
+                            format: removed.format,
+                            email: removed.email,
+                            role: removed.role
+                        })
+                    });
+
+                    if (res && res.success) {
+                        // 2. Baru hapus dari state lokal SETELAH backend konfirmasi berhasil
+                        this.pengurusList.splice(index, 1);
+                        localStorage.setItem('himagro_pengurus_database', JSON.stringify(this.pengurusList));
+                        this.populatePengurusDataList();
+                        this.populateDropdowns();
+                        this.renderPengurusList();
+                        this.showToast(`Entri "${removed.subDiv}" berhasil dihapus dari Spreadsheet!`, 'success');
+                        this.logActivity('DELETE_DATABASE_PENGURUS', '-', `${removed.subDiv} - ${removed.email}`);
+                    } else {
+                        // Backend gagal: tampilkan error spesifik dari server
+                        const errMsg = (res && res.error) ? res.error : 'Data tidak ditemukan di Spreadsheet';
+                        this.showToast(`Gagal hapus: ${errMsg}`, 'error');
+                    }
+                } catch (err) {
+                    console.error('Delete database API error:', err);
+                    this.showToast('Gagal terhubung ke Spreadsheet. Coba lagi.', 'error');
+                } finally {
+                    this.hideLoading();
+                }
+            }, 'Ya, Hapus', 'Batal');
+        }
+    }
+
+    renderPengurusList() {
+        const container = document.getElementById('pengurusListContainer');
+        const countBadge = document.getElementById('pengurusCountBadge');
+        if (countBadge) countBadge.textContent = `${this.pengurusList.length} Entri`;
+
+        if (!container) return;
+
+        if (!this.pengurusList.length) {
+            container.innerHTML = `<div style="text-align: center; color: rgba(255,255,255,0.5); padding: 20px; font-size: 0.9rem;">Belum ada entri database pengurus.</div>`;
+            return;
+        }
+
+        container.innerHTML = this.pengurusList.map((p, idx) => `
+            <div id="pengurus-row-${idx}" style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08); padding: 12px 16px; border-radius: 12px;">
+                <!-- VIEW MODE -->
+                <div id="pengurus-view-${idx}" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                    <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0;">
+                        <div style="font-weight: 700; color: white; font-size: 0.92rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <span>${p.subDiv}</span>
+                            <span style="font-size: 0.7rem; font-weight: 600; background: #059669; color: white; padding: 2px 8px; border-radius: 12px;">Role: ${p.role}</span>
+                            ${p.format ? `<span style="font-size: 0.7rem; font-weight: 600; background: #2563eb; color: white; padding: 2px 8px; border-radius: 12px;">Format: ${p.format}</span>` : ''}
+                        </div>
+                        <div style="font-size: 0.8rem; color: #a7f3d0; word-break: break-all;">
+                            <i class="fas fa-envelope" style="font-size: 0.75rem;"></i> ${p.email || '-'}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                        <button type="button" onclick="window.editPengurus(${idx})" title="Edit" style="background: rgba(37,99,235,0.15); border: 1px solid rgba(37,99,235,0.35); color: #93c5fd; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                            <i class="fas fa-pen" style="font-size: 0.8rem;"></i>
+                        </button>
+                        <button type="button" onclick="window.deletePengurus(${idx})" title="Hapus" style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                            <i class="fas fa-trash-alt" style="font-size: 0.8rem;"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- EDIT MODE (hidden by default) -->
+                <div id="pengurus-edit-${idx}" style="display: none; flex-direction: column; gap: 10px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-size: 0.78rem; color: #a7f3d0; display: block; margin-bottom: 4px;">Sub Divisi</label>
+                            <select id="edit-subDiv-${idx}" style="width:100%; padding: 8px 10px; border-radius: 8px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.9rem;">
+                                <option value="Content Writer" ${p.subDiv === 'Content Writer' ? 'selected' : ''}>Content Writer</option>
+                                <option value="Design Creator" ${p.subDiv === 'Design Creator' ? 'selected' : ''}>Design Creator</option>
+                                <option value="Relation And Archive" ${p.subDiv === 'Relation And Archive' ? 'selected' : ''}>Relation And Archive</option>
+                                <option value="Room Of Documentary" ${p.subDiv === 'Room Of Documentary' ? 'selected' : ''}>Room Of Documentary</option>
+                                <option value="Social Media" ${p.subDiv === 'Social Media' ? 'selected' : ''}>Social Media</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.78rem; color: #a7f3d0; display: block; margin-bottom: 4px;">Format</label>
+                            <select id="edit-format-${idx}" style="width:100%; padding: 8px 10px; border-radius: 8px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.9rem;">
+                                <option value="" ${!p.format ? 'selected' : ''}>-- Opsional --</option>
+                                <option value="Article" ${p.format === 'Article' ? 'selected' : ''}>Article</option>
+                                <option value="Caption" ${p.format === 'Caption' ? 'selected' : ''}>Caption</option>
+                                <option value="Carousel" ${p.format === 'Carousel' ? 'selected' : ''}>Carousel</option>
+                                <option value="Feeds" ${p.format === 'Feeds' ? 'selected' : ''}>Feeds</option>
+                                <option value="Feeds (Grid)" ${p.format === 'Feeds (Grid)' ? 'selected' : ''}>Feeds (Grid)</option>
+                                <option value="Foto" ${p.format === 'Foto' ? 'selected' : ''}>Foto</option>
+                                <option value="Journal" ${p.format === 'Journal' ? 'selected' : ''}>Journal</option>
+                                <option value="Story" ${p.format === 'Story' ? 'selected' : ''}>Story</option>
+                                <option value="Video" ${p.format === 'Video' ? 'selected' : ''}>Video</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+                        <div>
+                            <label style="font-size: 0.78rem; color: #a7f3d0; display: block; margin-bottom: 4px;">Email</label>
+                            <input type="text" id="edit-email-${idx}" value="${p.email}" style="width:100%; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.78rem; color: #a7f3d0; display: block; margin-bottom: 4px;">Role</label>
+                            <select id="edit-role-${idx}" style="width:100%; padding: 8px 10px; border-radius: 8px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.9rem;">
+                                <option value="Creator" ${p.role === 'Creator' ? 'selected' : ''}>Creator</option>
+                                <option value="Archive" ${p.role === 'Archive' ? 'selected' : ''}>Archive</option>
+                                <option value="Sosmed" ${p.role === 'Sosmed' ? 'selected' : ''}>Sosmed</option>
+                                <option value="Admin" ${p.role === 'Admin' ? 'selected' : ''}>Admin</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button type="button" onclick="window.cancelEditPengurus(${idx})" style="padding: 7px 16px; border-radius: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 0.85rem; cursor: pointer;">Batal</button>
+                        <button type="button" onclick="window.saveEditPengurus(${idx})" style="padding: 7px 16px; border-radius: 8px; background: #10b981; border: none; color: #042e23; font-size: 0.85rem; font-weight: 700; cursor: pointer;"><i class="fas fa-save"></i> Simpan</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    editPengurus(index) {
+        const viewEl = document.getElementById(`pengurus-view-${index}`);
+        const editEl = document.getElementById(`pengurus-edit-${index}`);
+        if (!viewEl || !editEl) return;
+        viewEl.style.display = 'none';
+        editEl.style.display = 'flex';
+    }
+
+    cancelEditPengurus(index) {
+        const viewEl = document.getElementById(`pengurus-view-${index}`);
+        const editEl = document.getElementById(`pengurus-edit-${index}`);
+        if (!viewEl || !editEl) return;
+        editEl.style.display = 'none';
+        viewEl.style.display = 'flex';
+    }
+
+    async saveEditPengurus(index) {
+        if (index < 0 || index >= this.pengurusList.length) return;
+
+        const oldData = { ...this.pengurusList[index] };
+
+        const newSubDiv = document.getElementById(`edit-subDiv-${index}`)?.value || '';
+        const newFormat = document.getElementById(`edit-format-${index}`)?.value || '';
+        const newEmail = document.getElementById(`edit-email-${index}`)?.value.trim() || '';
+        const newRole = document.getElementById(`edit-role-${index}`)?.value || 'Creator';
+
+        if (!newSubDiv || !newEmail) {
+            this.showToast('Sub Divisi dan Email tidak boleh kosong!', 'error');
+            return;
+        }
+
+        const newData = { subDiv: newSubDiv, format: newFormat, email: newEmail, role: newRole };
+
+        this.showLoading('Menyimpan perubahan ke Spreadsheet...');
+        try {
+            const res = await this.callAPI('updateDatabase', {
+                oldData: JSON.stringify(oldData),
+                newData: JSON.stringify(newData)
+            });
+
+            if (res && res.success) {
+                // Update local state
+                this.pengurusList[index] = newData;
+                localStorage.setItem('himagro_pengurus_database', JSON.stringify(this.pengurusList));
+                this.populatePengurusDataList();
+                this.populateDropdowns();
+                this.renderPengurusList();
+                this.showToast(`Entri "${newSubDiv}" berhasil diperbarui di Spreadsheet!`, 'success');
+                this.logActivity('UPDATE_DATABASE_PENGURUS', '-', `${newSubDiv} - ${newEmail}`);
+            } else {
+                const errMsg = (res && res.error) ? res.error : 'Gagal update di Spreadsheet';
+                this.showToast(`Gagal simpan: ${errMsg}`, 'error');
+                // Keep edit mode open so user can retry
+            }
+        } catch (err) {
+            console.error('Update database API error:', err);
+            this.showToast('Gagal terhubung ke Spreadsheet. Coba lagi.', 'error');
+        } finally {
+            this.hideLoading();
         }
     }
 
@@ -787,3 +1108,12 @@ function formatRelativeTime(ts) {
     if (diff < 7) return `${diff} hari lalu`;
     return d.toLocaleDateString('id-ID');
 }
+
+window.openAdminModal = () => app.openAdminModal();
+window.closeAdminModal = () => app.closeAdminModal();
+window.savePengurusData = () => app.savePengurusData();
+window.deletePengurus = (idx) => app.deletePengurus(idx);
+window.editPengurus = (idx) => app.editPengurus(idx);
+window.cancelEditPengurus = (idx) => app.cancelEditPengurus(idx);
+window.saveEditPengurus = (idx) => app.saveEditPengurus(idx);
+window.onAdminKategoriChange = () => app.onAdminKategoriChange();

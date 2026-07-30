@@ -42,35 +42,144 @@
         </div>
     </div>
 
-    <!-- Login Modal -->
-    <div id="loginModal" class="modal" style="display: none; background: var(--background);">
-        <div class="modal-content"
-            style="max-width: 500px; text-align: center; padding: 40px; background: #044434; border: 1px solid rgba(255,255,255,0.1);">
-            <div style="margin-bottom: 30px;">
-                <div
-                    style="background: white; border-radius: 50px; padding: 12px 25px; display: inline-flex; justify-content: center; align-items: center; gap: 12px; margin-bottom: 25px; white-space: nowrap; flex-wrap: nowrap;">
-                    <img src="Logo/Unsil.png" alt="UNSIL" style="height: 38px;">
-                    <img src="Logo/Himagro.png" alt="HIMAGRO" style="height: 38px;">
-                    <img src="Logo/Kabinet.png" alt="Kabinet" style="height: 38px;">
-                    <img src="Logo/BluSpeed.png" alt="BluSpeed" style="height: 38px;">
-                    <img src="Logo/Berdampak.png" alt="Berdampak" style="height: 38px;">
+    <!-- Login Modal (SINTESYS UNSIL Style Split-Screen) -->
+    <div id="loginModal" class="sintesys-login-overlay" style="display: none;">
+        <div class="sintesys-login-container">
+            <!-- Left Side: Form & Branding -->
+            <div class="sintesys-left-panel">
+                <div class="sintesys-header-logos">
+                    <img src="Logo/Unsil.png" alt="UNSIL">
+                    <img src="Logo/Himagro.png" alt="HIMAGRO">
+                    <img src="Logo/Kabinet.png" alt="Kabinet">
+                    <img src="Logo/BluSpeed.png" alt="BluSpeed">
+                    <img src="Logo/Berdampak.png" alt="Berdampak">
                 </div>
-                <h2 style="font-size: 2rem; margin-bottom: 15px; color: white; font-weight: 800;">Selamat Datang!</h2>
-                <p style="color: rgba(255,255,255,0.8); font-size: 0.95rem; line-height: 1.6;">Silakan masukkan nama
-                    Anda untuk mengakses dashboard CMS HIMAGRO.</p>
+
+                <h1 class="sintesys-univ-title">Universitas Siliwangi</h1>
+
+                <div class="sintesys-card">
+                    <h2 class="sintesys-card-title">Selamat Datang!</h2>
+
+                    <form id="loginForm" onsubmit="event.preventDefault(); window.handleLogin();" style="margin-top: 24px;">
+                        <div class="form-group sintesys-form-group">
+                            <label for="loginUserName" class="sintesys-label">Identitas Pengurus / Member</label>
+                            <div class="sintesys-input-wrapper">
+                                <i class="fas fa-user-circle sintesys-input-icon"></i>
+                                <input type="text" id="loginUserName" list="pengurusDataList" required placeholder="Pilih atau ketik nama Anda..." autocomplete="off">
+                                <datalist id="pengurusDataList">
+                                    <!-- Populated dynamically -->
+                                </datalist>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="sintesys-btn sintesys-btn-primary">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </button>
+                    </form>
+
+                    <div class="sintesys-notice" style="margin-top: 24px;">
+                        <i class="fas fa-info-circle"></i> Identitas Anda digunakan untuk pencatatan riwayat aktivitas (Log History).
+                    </div>
+                </div>
+
+                <div class="sintesys-footer-branding">
+                    <div class="bsre-badge">
+                        <i class="fas fa-shield-alt"></i> Balai Besar Sertifikasi Elektronik
+                    </div>
+                    <p>© 2022 - 2026 Universitas Siliwangi</p>
+                </div>
             </div>
-            <form id="loginForm" onsubmit="event.preventDefault(); window.handleLogin();">
-                <div class="form-group" style="margin-bottom: 24px;">
-                    <input type="text" id="loginUserName" required placeholder="Nama Lengkap Anda..."
-                        style="width: 100%; padding: 16px; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; font-size: 1.1rem; text-align: center;">
+
+            <!-- Right Side: Green Visual Overlay -->
+            <div class="sintesys-right-panel">
+                <div class="sintesys-bg-shapes">
+                    <div class="glass-shape shape-1"></div>
+                    <div class="glass-shape shape-2"></div>
+                    <div class="glass-shape shape-3"></div>
                 </div>
-                <button type="submit" class="btn btn-primary"
-                    style="width: 100%; padding: 16px; border-radius: 12px; font-weight: 800; font-size: 1.2rem; display: flex; justify-content: center; align-items: center;">
-                    LOGIN
-                </button>
-            </form>
-            <div style="margin-top: 30px; font-size: 0.85rem; color: rgba(255,255,255,0.5);">
-                Identitas Anda diperlukan untuk pencatatan riwayat perubahan (Log History).
+                <div class="sintesys-hero-content">
+                    <h1 class="sintesys-hero-title">CMS</h1>
+                    <p class="sintesys-hero-subtitle">Content Management System</p>
+                    <div class="sintesys-hero-tags">
+                        <span>Portal Content Planner</span> • <span>Prestasi Mahasiswa</span> • <span>Media Partner</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Mode Modal (Database Pengurus: Sub Divisi, Format, Email, Role) -->
+    <div id="adminModeModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px; padding: 0; border-radius: 20px; overflow: hidden; background: #042e23; border: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+            <div class="modal-header" style="background: rgba(16, 185, 129, 0.15); padding: 20px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 1.25rem; font-weight: 700; color: #10b981; margin: 0; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-database"></i> Edit Database - Kelola Pengurus
+                </h2>
+                <button class="btn-icon" onclick="closeAdminModal()" style="color: rgba(255,255,255,0.7); font-size: 1.2rem; cursor: pointer; background: transparent; border: none;"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="modal-body" style="padding: 24px; max-height: 75vh; overflow-y: auto;">
+                <form id="adminForm" onsubmit="event.preventDefault(); window.savePengurusData();">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Sub Divisi *</label>
+                            <select id="adminSubDivisi" required style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                                <option value="">-- Pilih Sub Divisi --</option>
+                                <option value="Content Writer">Content Writer</option>
+                                <option value="Design Creator">Design Creator</option>
+                                <option value="Relation And Archive">Relation And Archive</option>
+                                <option value="Room Of Documentary">Room Of Documentary</option>
+                                <option value="Social Media">Social Media</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Format (Konten)</label>
+                            <select id="adminFormat" style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                                <option value="">-- Pilih Format (Opsional) --</option>
+                                <option value="Article">Article</option>
+                                <option value="Caption">Caption</option>
+                                <option value="Carousel">Carousel</option>
+                                <option value="Feeds">Feeds</option>
+                                <option value="Feeds (Grid)">Feeds (Grid)</option>
+                                <option value="Foto">Foto</option>
+                                <option value="Journal">Journal</option>
+                                <option value="Story">Story</option>
+                                <option value="Video">Video</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Email Pengurus *</label>
+                            <input type="text" id="adminEmail" required placeholder="email1@unsil.ac.id, email2@gmail.com" style="width: 100%; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Role *</label>
+                            <select id="adminRole" required style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                                <option value="Creator">Creator</option>
+                                <option value="Archive">Archive</option>
+                                <option value="Sosmed">Sosmed</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; border-radius: 10px; font-weight: 700; font-size: 1rem; background: #10b981; border: none; color: #042e23; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fas fa-plus-circle"></i> Tambah Data Database Pengurus
+                    </button>
+                </form>
+
+                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 24px 0;">
+
+                <h3 style="font-size: 1rem; font-weight: 700; color: white; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>Entri Database Pengurus</span>
+                    <span id="pengurusCountBadge" style="font-size: 0.8rem; background: rgba(16,185,129,0.2); color: #a7f3d0; padding: 4px 10px; border-radius: 20px;">0 Data</span>
+                </h3>
+
+                <div id="pengurusListContainer" style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
+                    <!-- Rendered dynamically -->
+                </div>
             </div>
         </div>
     </div>
@@ -128,6 +237,10 @@
                 <button class="action-btn" onclick="app.clearCache()">
                     <i class="fas fa-eraser"></i>
                     <span>Clear Cache</span>
+                </button>
+                <button class="action-btn" onclick="openAdminModal()" style="color: #10b981;">
+                    <i class="fas fa-edit"></i>
+                    <span>Edit Database</span>
                 </button>
                 <button class="action-btn" onclick="app.logout()" style="color: #ef4444;">
                     <i class="fas fa-sign-out-alt"></i>

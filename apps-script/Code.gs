@@ -36,6 +36,10 @@ function doGet(e) {
       case 'getPrestasi': result = getPrestasiData(); break;
       case 'getMediaPartner': result = getMediaPartnerData(); break;
       case 'getDropdowns': result = getDropdownData(); break;
+      case 'getDatabase': result = getDatabaseData(); break;
+      case 'addDatabase': result = addDatabaseData(JSON.parse(e.parameter.data || '{}')); break;
+      case 'deleteDatabase': result = deleteDatabaseData(e.parameter.index, JSON.parse(e.parameter.data || '{}')); break;
+      case 'updateDatabase': result = updateDatabaseData(JSON.parse(e.parameter.oldData || '{}'), JSON.parse(e.parameter.newData || '{}')); break;
       case 'createTask': result = createTaskData(JSON.parse(e.parameter.data || '{}')); break;
       case 'updateTask': result = updateTaskData(parseInt(e.parameter.id, 10), JSON.parse(e.parameter.data || '{}')); break;
       case 'deleteTask': result = deleteTaskData(parseInt(e.parameter.id, 10)); break;
@@ -57,13 +61,14 @@ function getAllCombinedData() {
 
     const tasks = getTasksData(ssPlanner);
     const dropdowns = getDropdownData(ssPlanner);
+    const database = getDatabaseData(ssPlanner);
     
     // Pass existing task list to media partner to avoid re-opening planner
     const existingTaskNames = tasks.map(t => `Media Partner (${t.task})`.toLowerCase());
     const media = getMediaPartnerData(ssMedia, existingTaskNames);
     const prestasi = getPrestasiData(ssPrestasi);
 
-    return { success: true, tasks, prestasi, media, dropdowns, version: CONFIG.VERSION };
+    return { success: true, tasks, prestasi, media, dropdowns, database, version: CONFIG.VERSION };
   } catch (e) {
     return { success: false, error: 'Optimizer Error: ' + e.message };
   }
@@ -121,6 +126,173 @@ function getDropdownData(openedSs) {
     };
   } catch (e) {
     return { error: e.message };
+  }
+}
+
+function getDatabaseData(openedSs) {
+  try {
+    const ss = openedSs || SpreadsheetApp.openById(CONFIG.CONTENT_PLANNER.ID);
+    const sheet = ss.getSheetByName('Database');
+    if (!sheet) return [];
+
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return [];
+
+    const headers = data[0];
+    const subDivCol = headers.indexOf('Sub Divisi');
+    const formatCol = headers.indexOf('Format');
+    const emailCol = headers.indexOf('Email');
+    const roleCol = headers.indexOf('Role');
+
+    const result = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (row[subDivCol] || row[emailCol]) {
+        result.push({
+          subDiv: subDivCol > -1 ? row[subDivCol] : '',
+          format: formatCol > -1 ? row[formatCol] : '',
+          email: emailCol > -1 ? row[emailCol] : '',
+          role: roleCol > -1 ? row[roleCol] : 'Creator'
+        });
+      }
+    }
+    return result;
+  } catch (e) {
+    return [];
+  }
+}
+
+function addDatabaseData(data) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.CONTENT_PLANNER.ID);
+    let sheet = ss.getSheetByName('Database');
+    if (!sheet) {
+      sheet = ss.insertSheet('Database');
+      sheet.appendRow(['Sub Divisi', 'Format', 'Email', 'Role']);
+      sheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f3f3f3');
+    }
+    sheet.appendRow([
+      data.subDiv || '',
+      data.format || '',
+      data.email || '',
+      data.role || 'Creator'
+    ]);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function deleteDatabaseData(indexParam, dataObj) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.CONTENT_PLANNER.ID);
+    const sheet = ss.getSheetByName('Database');
+    if (!sheet) return { success: false, error: 'Sheet Database tidak ditemukan' };
+
+    const values = sheet.getDataRange().getValues();
+    if (values.length <= 1) return { success: false, error: 'Sheet Database kosong' };
+
+    const headers = values[0];
+    const subDivCol = headers.indexOf('Sub Divisi');
+    const formatCol = headers.indexOf('Format');
+    const emailCol = headers.indexOf('Email');
+    const roleCol = headers.indexOf('Role');
+
+    const targetSubDiv = (dataObj.subDiv || '').toString().trim().toLowerCase();
+    const targetEmail = (dataObj.email || '').toString().trim().toLowerCase();
+    const targetFormat = (dataObj.format || '').toString().trim().toLowerCase();
+    const targetRole = (dataObj.role || '').toString().trim().toLowerCase();
+
+    let targetRowIndex = -1;
+
+    // Search from row 1 (second row in sheet) to end
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      const rowSubDiv = (subDivCol > -1 ? row[subDivCol] : '').toString().trim().toLowerCase();
+      const rowFormat = (formatCol > -1 ? row[formatCol] : '').toString().trim().toLowerCase();
+      const rowEmail = (emailCol > -1 ? row[emailCol] : '').toString().trim().toLowerCase();
+      const rowRole = (roleCol > -1 ? row[roleCol] : '').toString().trim().toLowerCase();
+
+      const matchesSubDiv = !targetSubDiv || rowSubDiv === targetSubDiv;
+      const matchesEmail = !targetEmail || rowEmail === targetEmail;
+      const matchesFormat = !targetFormat || rowFormat === targetFormat;
+      const matchesRole = !targetRole || rowRole === targetRole;
+
+      if (matchesSubDiv && matchesEmail && matchesFormat && matchesRole) {
+        targetRowIndex = i + 1; // 1-based index in sheet
+        break;
+      }
+    }
+
+    // Fallback to row index if specified and valid
+    if (targetRowIndex === -1 && indexParam !== undefined && indexParam !== null && indexParam !== '') {
+      const idx = parseInt(indexParam, 10);
+      if (!isNaN(idx) && idx >= 0 && (idx + 2) <= values.length) {
+        targetRowIndex = idx + 2;
+      }
+    }
+
+    if (targetRowIndex > 1 && targetRowIndex <= sheet.getLastRow()) {
+      sheet.deleteRow(targetRowIndex);
+      return { success: true, deletedRow: targetRowIndex };
+    }
+
+    return { success: false, error: 'Baris data tidak ditemukan di Spreadsheet' };
+  } catch (e) {
+    return { success: false, error: 'Error deleteDatabase: ' + e.message };
+  }
+}
+
+function updateDatabaseData(oldData, newData) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.CONTENT_PLANNER.ID);
+    const sheet = ss.getSheetByName('Database');
+    if (!sheet) return { success: false, error: 'Sheet Database tidak ditemukan' };
+
+    const values = sheet.getDataRange().getValues();
+    if (values.length <= 1) return { success: false, error: 'Sheet Database kosong' };
+
+    const headers = values[0];
+    const subDivCol = headers.indexOf('Sub Divisi');
+    const formatCol = headers.indexOf('Format');
+    const emailCol = headers.indexOf('Email');
+    const roleCol = headers.indexOf('Role');
+
+    const oldSubDiv = (oldData.subDiv || '').toString().trim().toLowerCase();
+    const oldEmail   = (oldData.email  || '').toString().trim().toLowerCase();
+    const oldFormat  = (oldData.format || '').toString().trim().toLowerCase();
+    const oldRole    = (oldData.role   || '').toString().trim().toLowerCase();
+
+    let targetRowIndex = -1;
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      const rowSubDiv = (subDivCol > -1 ? row[subDivCol] : '').toString().trim().toLowerCase();
+      const rowFormat = (formatCol > -1 ? row[formatCol] : '').toString().trim().toLowerCase();
+      const rowEmail  = (emailCol  > -1 ? row[emailCol]  : '').toString().trim().toLowerCase();
+      const rowRole   = (roleCol   > -1 ? row[roleCol]   : '').toString().trim().toLowerCase();
+
+      const matchesSubDiv = !oldSubDiv || rowSubDiv === oldSubDiv;
+      const matchesEmail  = !oldEmail  || rowEmail  === oldEmail;
+      const matchesFormat = !oldFormat || rowFormat === oldFormat;
+      const matchesRole   = !oldRole   || rowRole   === oldRole;
+
+      if (matchesSubDiv && matchesEmail && matchesFormat && matchesRole) {
+        targetRowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (targetRowIndex > 1 && targetRowIndex <= sheet.getLastRow()) {
+      if (subDivCol > -1) sheet.getRange(targetRowIndex, subDivCol + 1).setValue(newData.subDiv || '');
+      if (formatCol > -1) sheet.getRange(targetRowIndex, formatCol + 1).setValue(newData.format || '');
+      if (emailCol  > -1) sheet.getRange(targetRowIndex, emailCol  + 1).setValue(newData.email  || '');
+      if (roleCol   > -1) sheet.getRange(targetRowIndex, roleCol   + 1).setValue(newData.role   || 'Creator');
+      return { success: true, updatedRow: targetRowIndex };
+    }
+
+    return { success: false, error: 'Baris data tidak ditemukan untuk diupdate' };
+  } catch (e) {
+    return { success: false, error: 'Error updateDatabase: ' + e.message };
   }
 }
 
