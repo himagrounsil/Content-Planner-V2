@@ -59,12 +59,14 @@
                 <div class="sintesys-card">
                     <h2 class="sintesys-card-title">Selamat Datang!</h2>
 
-                    <form id="loginForm" onsubmit="event.preventDefault(); window.handleLogin();" style="margin-top: 24px;">
+                    <form id="loginForm" onsubmit="event.preventDefault(); window.handleLogin();"
+                        style="margin-top: 24px;">
                         <div class="form-group sintesys-form-group">
-                            <label for="loginUserName" class="sintesys-label">Identitas Pengurus / Member</label>
+                            <label for="loginUserName" class="sintesys-label">Identitas Pengurus </label>
                             <div class="sintesys-input-wrapper">
                                 <i class="fas fa-user-circle sintesys-input-icon"></i>
-                                <input type="text" id="loginUserName" required placeholder="Ketik nama Anda..." autocomplete="off">
+                                <input type="text" id="loginUserName" required placeholder="Ketik nama Anda..."
+                                    autocomplete="off">
                             </div>
                         </div>
 
@@ -74,7 +76,8 @@
                     </form>
 
                     <div class="sintesys-notice" style="margin-top: 24px;">
-                        <i class="fas fa-info-circle"></i> Identitas Anda digunakan untuk pencatatan riwayat aktivitas (Log History).
+                        <i class="fas fa-info-circle"></i> Identitas Anda digunakan untuk pencatatan riwayat aktivitas
+                        (Log History).
                     </div>
                 </div>
 
@@ -82,9 +85,10 @@
                     <div class="bsre-badge">
                         <i class="fas fa-bolt" style="color: #f59e0b;"></i> Hosted on GitHub
                     </div>
-                    <p style="margin: 6px 0 2px 0; font-weight: 600;">© 2025 - KOMINFO SASWAHITA</p>
+                    <p style="margin: 6px 0 2px 0; font-weight: 600;">© 2025 - KABINET CITA SASWAHITA</p>
                     <p style="font-size: 0.82rem; color: #64748b; margin: 4px 0 0 0;">
-                        Perlu Bantuan? <a href="https://instagram.com/upallee" target="_blank" rel="noopener noreferrer" style="color: #059669; font-weight: 600; text-decoration: underline;">Hubungi kami</a>
+                        Perlu Bantuan? <a href="https://instagram.com/upallee" target="_blank" rel="noopener noreferrer"
+                            style="color: #059669; font-weight: 600; text-decoration: underline;">Hubungi kami</a>
                     </p>
                 </div>
             </div>
@@ -100,7 +104,8 @@
                     <h1 class="sintesys-hero-title">CMS HIMAGRO</h1>
                     <p class="sintesys-hero-subtitle"><i>Content Management System</i> HIMAGRO</p>
                     <div class="sintesys-hero-tags">
-                        <span>Portal Content Planner</span> • <span>Prestasi Mahasiswa</span> • <span>Media Partner</span>
+                        <span>Portal Content Planner</span> • <span>Prestasi Mahasiswa</span> • <span>Media
+                            Partner</span>
                     </div>
                 </div>
             </div>
@@ -109,20 +114,28 @@
 
     <!-- Admin Mode Modal (Database Pengurus: Sub Divisi, Format, Email, Role) -->
     <div id="adminModeModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 700px; padding: 0; border-radius: 20px; overflow: hidden; background: #042e23; border: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
-            <div class="modal-header" style="background: rgba(16, 185, 129, 0.15); padding: 20px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="font-size: 1.25rem; font-weight: 700; color: #10b981; margin: 0; display: flex; align-items: center; gap: 10px;">
+        <div class="modal-content"
+            style="max-width: 700px; padding: 0; border-radius: 20px; overflow: hidden; background: #042e23; border: 1px solid rgba(16, 185, 129, 0.3); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+            <div class="modal-header"
+                style="background: rgba(16, 185, 129, 0.15); padding: 20px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h2
+                    style="font-size: 1.25rem; font-weight: 700; color: #10b981; margin: 0; display: flex; align-items: center; gap: 10px;">
                     <i class="fas fa-database"></i> Edit Database - Kelola Pengurus
                 </h2>
-                <button class="btn-icon" onclick="closeAdminModal()" style="color: rgba(255,255,255,0.7); font-size: 1.2rem; cursor: pointer; background: transparent; border: none;"><i class="fas fa-times"></i></button>
+                <button class="btn-icon" onclick="closeAdminModal()"
+                    style="color: rgba(255,255,255,0.7); font-size: 1.2rem; cursor: pointer; background: transparent; border: none;"><i
+                        class="fas fa-times"></i></button>
             </div>
-            
+
             <div class="modal-body" style="padding: 24px; max-height: 75vh; overflow-y: auto;">
                 <form id="adminForm" onsubmit="event.preventDefault(); window.savePengurusData();">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Sub Divisi *</label>
-                            <select id="adminSubDivisi" required style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                            <label
+                                style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Sub
+                                Divisi *</label>
+                            <select id="adminSubDivisi" required
+                                style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
                                 <option value="">-- Pilih Sub Divisi --</option>
                                 <option value="Content Writer">Content Writer</option>
                                 <option value="Design Creator">Design Creator</option>
@@ -132,8 +145,11 @@
                             </select>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Format (Konten)</label>
-                            <select id="adminFormat" style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                            <label
+                                style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Format
+                                (Konten)</label>
+                            <select id="adminFormat"
+                                style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
                                 <option value="">-- Pilih Format (Opsional) --</option>
                                 <option value="Article">Article</option>
                                 <option value="Caption">Caption</option>
@@ -150,12 +166,19 @@
 
                     <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Email Pengurus *</label>
-                            <input type="text" id="adminEmail" required placeholder="email1@unsil.ac.id, email2@gmail.com" style="width: 100%; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                            <label
+                                style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Email
+                                Pengurus *</label>
+                            <input type="text" id="adminEmail" required
+                                placeholder="email1@unsil.ac.id, email2@gmail.com"
+                                style="width: 100%; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Role *</label>
-                            <select id="adminRole" required style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
+                            <label
+                                style="display: block; font-size: 0.85rem; font-weight: 600; color: #a7f3d0; margin-bottom: 6px;">Role
+                                *</label>
+                            <select id="adminRole" required
+                                style="width: 100%; padding: 12px 14px; border-radius: 10px; background: #043d2f; border: 1px solid rgba(16,185,129,0.3); color: white; font-size: 0.95rem;">
                                 <option value="Creator">Creator</option>
                                 <option value="Archive">Archive</option>
                                 <option value="Sosmed">Sosmed</option>
@@ -164,19 +187,24 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; border-radius: 10px; font-weight: 700; font-size: 1rem; background: #10b981; border: none; color: #042e23; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <button type="submit" class="btn btn-primary"
+                        style="width: 100%; padding: 14px; border-radius: 10px; font-weight: 700; font-size: 1rem; background: #10b981; border: none; color: #042e23; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                         <i class="fas fa-plus-circle"></i> Tambah Data Database Pengurus
                     </button>
                 </form>
 
                 <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 24px 0;">
 
-                <h3 style="font-size: 1rem; font-weight: 700; color: white; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <h3
+                    style="font-size: 1rem; font-weight: 700; color: white; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
                     <span>Entri Database Pengurus</span>
-                    <span id="pengurusCountBadge" style="font-size: 0.8rem; background: rgba(16,185,129,0.2); color: #a7f3d0; padding: 4px 10px; border-radius: 20px;">0 Data</span>
+                    <span id="pengurusCountBadge"
+                        style="font-size: 0.8rem; background: rgba(16,185,129,0.2); color: #a7f3d0; padding: 4px 10px; border-radius: 20px;">0
+                        Data</span>
                 </h3>
 
-                <div id="pengurusListContainer" style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
+                <div id="pengurusListContainer"
+                    style="display: flex; flex-direction: column; gap: 10px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
                     <!-- Rendered dynamically -->
                 </div>
             </div>
